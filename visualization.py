@@ -13,7 +13,7 @@ import torch
 
 from data import build_dataloaders
 from train import load_checkpoint, inverse_transform_target
-from utils import ensure_dir
+from utils import ensure_dir, nse, rmse, mae
 
 
 def load_history(history_path: str) -> Dict:
@@ -39,16 +39,12 @@ def plot_training_history(
     history: Dict,
     output_dir: str = "outputs/figures",
 ) -> List[str]:
-    """
-    Plot training/validation loss and NSE curves.
-    """
     ensure_dir(output_dir)
     _apply_clean_style()
 
     saved_paths = []
     epochs = np.arange(1, len(history["train_loss"]) + 1)
 
-    # Loss
     plt.figure()
     plt.plot(epochs, history["train_loss"], label="Train Loss")
     plt.plot(epochs, history["val_loss"], label="Validation Loss")
@@ -62,7 +58,6 @@ def plot_training_history(
     plt.close()
     saved_paths.append(loss_path)
 
-    # NSE
     plt.figure()
     plt.plot(epochs, history["train_nse"], label="Train NSE")
     plt.plot(epochs, history["val_nse"], label="Validation NSE")
@@ -84,7 +79,7 @@ def collect_test_predictions(
     batch_size: int = 64,
 ) -> Dict:
     """
-    Run the saved model on the test set and collect predictions.
+    Load checkpoint, run on test set, and collect predictions.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, checkpoint = load_checkpoint(checkpoint_path, device=device)
@@ -122,8 +117,8 @@ def collect_test_predictions(
 
     obs = np.concatenate(all_obs)
     pred = np.concatenate(all_pred)
-    pred_time = np.array(all_time, dtype="datetime64[D]")
     basin_id = np.array(all_basin)
+    pred_time = np.array(all_time, dtype="datetime64[D]")
 
     return {
         "obs": obs,
@@ -139,9 +134,6 @@ def plot_parity(
     output_dir: str = "outputs/figures",
     max_points: int = 4000,
 ) -> str:
-    """
-    Create a cleaner parity plot.
-    """
     ensure_dir(output_dir)
     _apply_clean_style()
 
@@ -171,31 +163,66 @@ def plot_parity(
     return out_path
 
 
-def select_basin_for_timeseries(results: Dict) -> str:
+def compute_per_basin_metrics(results: Dict) -> List[Dict]:
     """
-    Pick the basin with the most test samples.
+    Compute NSE, RMSE, and MAE for each basin on the test set.
     """
-    basin_ids = results["basin_id"]
-    unique_basins, counts = np.unique(basin_ids, return_counts=True)
-    return str(unique_basins[np.argmax(counts)])
+    basin_ids = np.unique(results["basin_id"])
+    rows = []
+
+    for basin in basin_ids:
+        mask = results["basin_id"] == basin
+        obs = results["obs"][mask]
+        pred = results["pred"][mask]
+
+        if len(obs) < 2:
+            continue
+
+        rows.append({
+            "basin_id": str(basin),
+            "n_samples": int(len(obs)),
+            "nse": float(nse(obs, pred)),
+            "rmse": float(rmse(obs, pred)),
+            "mae": float(mae(obs, pred)),
+        })
+
+    rows.sort(key=lambda x: x["nse"], reverse=True)
+    return rows
+
+
+def get_best_and_worst_basin(results: Dict) -> Dict:
+    """
+    Return best and worst basin by test NSE.
+    """
+    rows = compute_per_basin_metrics(results)
+
+    valid_rows = [r for r in rows if not np.isnan(r["nse"])]
+    if len(valid_rows) == 0:
+        raise ValueError("No valid basin-level NSE values found.")
+
+    best = valid_rows[0]
+    worst = valid_rows[-1]
+
+    return {
+        "best": best,
+        "worst": worst,
+        "all_metrics": valid_rows,
+    }
 
 
 def plot_test_timeseries(
     results: Dict,
-    basin_id: Optional[str] = None,
+    basin_id: str,
     output_dir: str = "outputs/figures",
     max_points: int = 365,
-    date_format: str = "%Y-%m",
+    title_prefix: str = "",
+    filename_prefix: str = "",
 ) -> str:
     """
     Plot observed vs predicted streamflow for one basin.
-    By default, plot only the first 365 points for readability.
     """
     ensure_dir(output_dir)
     _apply_clean_style()
-
-    if basin_id is None:
-        basin_id = select_basin_for_timeseries(results)
 
     mask = results["basin_id"] == basin_id
     obs = results["obs"][mask]
@@ -206,6 +233,10 @@ def plot_test_timeseries(
     obs = obs[sort_idx]
     pred = pred[sort_idx]
     times = times[sort_idx]
+
+    basin_nse = nse(obs, pred)
+    basin_rmse = rmse(obs, pred)
+    basin_mae = mae(obs, pred)
 
     if len(obs) > max_points:
         obs = obs[:max_points]
@@ -220,69 +251,70 @@ def plot_test_timeseries(
 
     ax.set_xlabel("Date")
     ax.set_ylabel("Streamflow")
-    ax.set_title(f"Observed vs Predicted Streamflow\nTest Basin: {basin_id}")
+    ax.set_title(
+        f"{title_prefix} Basin: {basin_id}\n"
+        f"NSE = {basin_nse:.3f}, RMSE = {basin_rmse:.3f}, MAE = {basin_mae:.3f}"
+    )
     ax.legend(frameon=True)
 
-    # Cleaner date axis
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter(date_format))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
     plt.xticks(rotation=45, ha="right")
 
     plt.tight_layout()
 
-    out_path = os.path.join(output_dir, f"timeseries_basin_{basin_id}.png")
+    out_path = os.path.join(output_dir, f"{filename_prefix}basin_{basin_id}.png")
     plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()
 
     return out_path
 
 
-def plot_test_timeseries_full_years(
+def plot_best_and_worst_basins(
     results: Dict,
-    basin_id: Optional[str] = None,
     output_dir: str = "outputs/figures",
-) -> str:
+    max_points: int = 365,
+) -> Dict:
     """
-    Plot the full available basin test period with yearly ticks.
+    Generate time-series plots for best and worst test basins.
     """
     ensure_dir(output_dir)
-    _apply_clean_style()
 
-    if basin_id is None:
-        basin_id = select_basin_for_timeseries(results)
+    summary = get_best_and_worst_basin(results)
+    best = summary["best"]
+    worst = summary["worst"]
 
-    mask = results["basin_id"] == basin_id
-    obs = results["obs"][mask]
-    pred = results["pred"][mask]
-    times = results["pred_time"][mask]
+    best_path = plot_test_timeseries(
+        results=results,
+        basin_id=best["basin_id"],
+        output_dir=output_dir,
+        max_points=max_points,
+        title_prefix="Best Test Basin",
+        filename_prefix="best_",
+    )
 
-    sort_idx = np.argsort(times)
-    obs = obs[sort_idx]
-    pred = pred[sort_idx]
-    times = times[sort_idx]
+    worst_path = plot_test_timeseries(
+        results=results,
+        basin_id=worst["basin_id"],
+        output_dir=output_dir,
+        max_points=max_points,
+        title_prefix="Worst Test Basin",
+        filename_prefix="worst_",
+    )
 
-    times = np.array(times, dtype="datetime64[D]").astype("datetime64[ms]").astype(object)
-
-    fig, ax = plt.subplots(figsize=(12, 5.5))
-    ax.plot(times, obs, label="Observed", linewidth=2.2)
-    ax.plot(times, pred, label="Predicted", linewidth=2.0, alpha=0.9)
-
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Streamflow")
-    ax.set_title(f"Observed vs Predicted Streamflow (Full Test Period)\nTest Basin: {basin_id}")
-    ax.legend(frameon=True)
-
-    ax.xaxis.set_major_locator(mdates.YearLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    plt.xticks(rotation=45, ha="right")
-
-    plt.tight_layout()
-
-    out_path = os.path.join(output_dir, f"timeseries_full_basin_{basin_id}.png")
-    plt.savefig(out_path, dpi=300, bbox_inches="tight")
-    plt.close()
-
-    return out_path
+    return {
+        "best_basin_id": best["basin_id"],
+        "best_basin_nse": best["nse"],
+        "best_basin_rmse": best["rmse"],
+        "best_basin_mae": best["mae"],
+        "best_plot": best_path,
+        "worst_basin_id": worst["basin_id"],
+        "worst_basin_nse": worst["nse"],
+        "worst_basin_rmse": worst["rmse"],
+        "worst_basin_mae": worst["mae"],
+        "worst_plot": worst_path,
+        "all_metrics": summary["all_metrics"],
+    }
 
 
 def generate_all_plots(
@@ -292,10 +324,9 @@ def generate_all_plots(
     batch_size: int = 64,
 ) -> Dict:
     """
-    Generate all main plots.
+    Generate all main plots, including best and worst basin plots.
     """
     ensure_dir(output_dir)
-
     saved = {}
 
     if os.path.exists(history_path):
@@ -307,16 +338,12 @@ def generate_all_plots(
     results = collect_test_predictions(checkpoint_path, batch_size=batch_size)
 
     saved["parity_plot"] = plot_parity(results["obs"], results["pred"], output_dir=output_dir)
-    saved["timeseries_plot"] = plot_test_timeseries(
-        results,
-        basin_id=None,
+
+    basin_summary = plot_best_and_worst_basins(
+        results=results,
         output_dir=output_dir,
         max_points=365,
     )
-    saved["timeseries_full_plot"] = plot_test_timeseries_full_years(
-        results,
-        basin_id=None,
-        output_dir=output_dir,
-    )
+    saved["best_worst_summary"] = basin_summary
 
     return saved
