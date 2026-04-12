@@ -1,5 +1,5 @@
-*.pyc  minicamels-main/ 
-.venv/ 
-__pycache__/ 
-outputs/ 
-*.pyc 
+minicamels-main/
+.venv/
+__pycache__/
+outputs/
+*.pyc
