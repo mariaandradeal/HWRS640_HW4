@@ -15,6 +15,7 @@ from model import create_model
 from train import load_checkpoint, inverse_transform_target
 from utils import ensure_dir
 
+import matplotlib.dates as mdates
 
 def load_history(history_path: str) -> Dict:
     with open(history_path, "r", encoding="utf-8") as f:
@@ -208,7 +209,11 @@ def plot_test_timeseries(
     plt.title(f"Observed vs Predicted Streamflow\nTest Basin: {basin_id}")
     plt.legend()
     plt.grid(True, alpha=0.3)
+    ax = plt.gca()
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
     plt.xticks(rotation=45)
+    
 
     out_path = os.path.join(output_dir, f"timeseries_basin_{basin_id}.png")
     plt.tight_layout()
