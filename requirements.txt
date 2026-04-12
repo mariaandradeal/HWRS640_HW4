@@ -3,4 +3,4 @@ matplotlib
 scikit-learn
 torch
 xarray
-minicamels
+git+https://github.com/andrbenn/minicamels.git
