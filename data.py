@@ -66,7 +66,7 @@ class StreamflowDataset(Dataset):
             "x_static": torch.tensor(s["x_static"], dtype=torch.float32),
             "y": torch.tensor([s["y"]], dtype=torch.float32),
             "basin_id": s["basin_id"],
-            "pred_time": s["pred_time"],
+            "pred_time": str(s["pred_time"]),
         }
 
 
@@ -250,7 +250,7 @@ def build_samples_for_one_split(
         for i in range(len(df) - seq_len):
             x_seq = x_dyn[i : i + seq_len]
             y_target = y[i + seq_len]
-            pred_time = pd.Timestamp(times[i + seq_len])
+            pred_time = str(pd.Timestamp(times[i + seq_len]).date())
 
             if np.isnan(x_seq).any() or np.isnan(y_target):
                 continue
