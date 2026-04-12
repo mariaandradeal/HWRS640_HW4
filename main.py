@@ -2,22 +2,49 @@ import argparse
 
 from data import summarize_dataset, build_dataloaders
 from model import create_model, count_trainable_parameters
+from train import train_model, evaluate_model
 
 
 def main():
     parser = argparse.ArgumentParser(description="HWRS640 Assignment 4 CLI")
-    parser.add_argument(
-        "command",
-        choices=[
-            "summarize-data",
-            "debug-data",
-            "debug-model",
-            "train",
-            "evaluate",
-            "plot",
-        ],
-        help="Command to run",
-    )
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # summarize-data
+    subparsers.add_parser("summarize-data", help="Print dataset summary")
+
+    # debug-data
+    debug_data_parser = subparsers.add_parser("debug-data", help="Debug dataloaders")
+    debug_data_parser.add_argument("--seq-len", type=int, default=60)
+    debug_data_parser.add_argument("--batch-size", type=int, default=32)
+
+    # debug-model
+    debug_model_parser = subparsers.add_parser("debug-model", help="Debug model forward pass")
+    debug_model_parser.add_argument("--seq-len", type=int, default=60)
+    debug_model_parser.add_argument("--batch-size", type=int, default=32)
+
+    # train
+    train_parser = subparsers.add_parser("train", help="Train the LSTM model")
+    train_parser.add_argument("--seq-len", type=int, default=60)
+    train_parser.add_argument("--batch-size", type=int, default=64)
+    train_parser.add_argument("--hidden-size", type=int, default=64)
+    train_parser.add_argument("--num-layers", type=int, default=1)
+    train_parser.add_argument("--dropout", type=float, default=0.1)
+    train_parser.add_argument("--static-hidden-size", type=int, default=32)
+    train_parser.add_argument("--fusion-hidden-size", type=int, default=32)
+    train_parser.add_argument("--learning-rate", type=float, default=1e-3)
+    train_parser.add_argument("--epochs", type=int, default=20)
+    train_parser.add_argument("--seed", type=int, default=42)
+    train_parser.add_argument("--output-dir", type=str, default="outputs")
+
+    # evaluate
+    eval_parser = subparsers.add_parser("evaluate", help="Evaluate a saved model on the test set")
+    eval_parser.add_argument("--checkpoint", type=str, required=True)
+    eval_parser.add_argument("--batch-size", type=int, default=64)
+
+    # placeholder plot command
+    plot_parser = subparsers.add_parser("plot", help="Plot results")
+    plot_parser.add_argument("--checkpoint", type=str, required=False, default=None)
 
     args = parser.parse_args()
 
@@ -26,8 +53,8 @@ def main():
 
     elif args.command == "debug-data":
         train_loader, val_loader, test_loader, meta = build_dataloaders(
-            seq_len=60,
-            batch_size=32,
+            seq_len=args.seq_len,
+            batch_size=args.batch_size,
         )
 
         print("Train samples:", meta["n_train_samples"])
@@ -43,8 +70,8 @@ def main():
 
     elif args.command == "debug-model":
         train_loader, _, _, meta = build_dataloaders(
-            seq_len=60,
-            batch_size=32,
+            seq_len=args.seq_len,
+            batch_size=args.batch_size,
         )
         batch = next(iter(train_loader))
 
@@ -66,10 +93,34 @@ def main():
         print("Trainable parameters:", count_trainable_parameters(model))
 
     elif args.command == "train":
-        print("Train command not implemented yet.")
+        results = train_model(
+            seq_len=args.seq_len,
+            batch_size=args.batch_size,
+            hidden_size=args.hidden_size,
+            num_layers=args.num_layers,
+            dropout=args.dropout,
+            static_hidden_size=args.static_hidden_size,
+            fusion_hidden_size=args.fusion_hidden_size,
+            learning_rate=args.learning_rate,
+            epochs=args.epochs,
+            seed=args.seed,
+            output_dir=args.output_dir,
+        )
+
+        print("\nTraining complete.")
+        print("Best checkpoint:", results["best_checkpoint_path"])
+        print("History saved to:", results["history_path"])
 
     elif args.command == "evaluate":
-        print("Evaluate command not implemented yet.")
+        results = evaluate_model(
+            checkpoint_path=args.checkpoint,
+            batch_size=args.batch_size,
+        )
+
+        print("\n===== Test Results =====")
+        for key, value in results.items():
+            print(f"{key}: {value:.4f}")
+        print("========================\n")
 
     elif args.command == "plot":
         print("Plot command not implemented yet.")
