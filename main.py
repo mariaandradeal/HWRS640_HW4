@@ -3,6 +3,7 @@ import argparse
 from data import summarize_dataset, build_dataloaders
 from model import create_model, count_trainable_parameters
 from train import train_model, evaluate_model
+from visualization import generate_all_plots
 
 
 def main():
@@ -42,9 +43,12 @@ def main():
     eval_parser.add_argument("--checkpoint", type=str, required=True)
     eval_parser.add_argument("--batch-size", type=int, default=64)
 
-    # placeholder plot command
-    plot_parser = subparsers.add_parser("plot", help="Plot results")
-    plot_parser.add_argument("--checkpoint", type=str, required=False, default=None)
+    # plot
+    plot_parser = subparsers.add_parser("plot", help="Generate figures")
+    plot_parser.add_argument("--checkpoint", type=str, required=True)
+    plot_parser.add_argument("--history", type=str, default="outputs/metrics/training_history.json")
+    plot_parser.add_argument("--output-dir", type=str, default="outputs/figures")
+    plot_parser.add_argument("--batch-size", type=int, default=64)
 
     args = parser.parse_args()
 
@@ -123,7 +127,16 @@ def main():
         print("========================\n")
 
     elif args.command == "plot":
-        print("Plot command not implemented yet.")
+        saved = generate_all_plots(
+            checkpoint_path=args.checkpoint,
+            history_path=args.history,
+            output_dir=args.output_dir,
+            batch_size=args.batch_size,
+        )
+
+        print("\nGenerated plots:")
+        for key, value in saved.items():
+            print(f"{key}: {value}")
 
 
 if __name__ == "__main__":
