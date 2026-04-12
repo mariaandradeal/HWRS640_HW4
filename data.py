@@ -44,15 +44,6 @@ class NormalizationStats:
 
 
 class StreamflowDataset(Dataset):
-    """
-    Dataset returning:
-      - x_seq:    (seq_len, n_dynamic)
-      - x_static: (n_static,)
-      - y:        (1,)
-      - basin_id
-      - pred_time
-    """
-
     def __init__(self, samples: List[Dict]):
         self.samples = samples
 
@@ -65,15 +56,12 @@ class StreamflowDataset(Dataset):
             "x_seq": torch.tensor(s["x_seq"], dtype=torch.float32),
             "x_static": torch.tensor(s["x_static"], dtype=torch.float32),
             "y": torch.tensor([s["y"]], dtype=torch.float32),
-            "basin_id": s["basin_id"],
+            "basin_id": str(s["basin_id"]),
             "pred_time": str(s["pred_time"]),
         }
 
 
 def summarize_dataset() -> None:
-    """
-    Print a summary of the MiniCAMELS dataset.
-    """
     ds = MiniCamels()
 
     basins_df = ds.basins()
@@ -82,8 +70,7 @@ def summarize_dataset() -> None:
     print("Basins columns:", basins_df.columns.tolist())
     print("Attributes columns:", attrs_df.columns.tolist())
 
-    basin_id_col = "basin_id"
-    example_basin_id = str(basins_df.iloc[0][basin_id_col])
+    example_basin_id = str(basins_df.iloc[0]["basin_id"])
 
     ts = ds.load_basin(example_basin_id)
     df = ts.to_dataframe().reset_index()
@@ -104,22 +91,11 @@ def summarize_dataset() -> None:
 
 
 def load_all_basin_data() -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
-    """
-    Load all basin static attributes and dynamic time series.
-
-    Returns
-    -------
-    attrs_df : pd.DataFrame
-        Static attribute table indexed by basin_id.
-    basin_timeseries : dict
-        Dictionary mapping basin_id -> time series DataFrame.
-    """
     ds = MiniCamels()
 
     basins_df = ds.basins().copy()
     attrs_df = ds.attributes().copy()
 
-    # Safely attach basin_id to attributes and use it as index
     attrs_df["basin_id"] = basins_df["basin_id"].values.astype(str)
     attrs_df = attrs_df.set_index("basin_id")
 
@@ -131,14 +107,8 @@ def load_all_basin_data() -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
 
         df["time"] = pd.to_datetime(df["time"])
         df = df.sort_values("time").reset_index(drop=True)
-
-        # Keep only required columns
         df = df[["time"] + DYNAMIC_VARS + [TARGET_VAR]].copy()
-
-        # Remove rows with missing values
         df = df.dropna().reset_index(drop=True)
-
-        # Remove invalid negative streamflow values if present
         df = df[df[TARGET_VAR] >= 0].reset_index(drop=True)
 
         basin_timeseries[basin_id] = df
@@ -152,9 +122,6 @@ def split_timeseries_by_time(
     val_end: str = "2005-09-30",
     test_end: str = "2010-09-30",
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Split one basin time series into train/val/test using time only.
-    """
     train_end = pd.Timestamp(train_end)
     val_end = pd.Timestamp(val_end)
     test_end = pd.Timestamp(test_end)
@@ -170,9 +137,6 @@ def compute_normalization_stats(
     attrs_df: pd.DataFrame,
     train_timeseries: Dict[str, pd.DataFrame],
 ) -> NormalizationStats:
-    """
-    Compute normalization statistics using training data only.
-    """
     dynamic_all = []
     static_all = []
 
@@ -220,15 +184,6 @@ def build_samples_for_one_split(
     seq_len: int = 60,
     log_target: bool = True,
 ) -> List[Dict]:
-    """
-    Create sliding-window samples for one split.
-
-    Input:
-      x_seq = days [i, ..., i + seq_len - 1]
-
-    Target:
-      y = qobs on day i + seq_len
-    """
     samples: List[Dict] = []
 
     for basin_id, df in split_timeseries.items():
@@ -260,7 +215,7 @@ def build_samples_for_one_split(
                     "x_seq": x_seq,
                     "x_static": x_static,
                     "y": float(y_target),
-                    "basin_id": basin_id,
+                    "basin_id": str(basin_id),
                     "pred_time": pred_time,
                 }
             )
@@ -274,9 +229,6 @@ def build_dataloaders(
     log_target: bool = True,
     num_workers: int = 0,
 ) -> Tuple[DataLoader, DataLoader, DataLoader, Dict]:
-    """
-    Build train, validation, and test dataloaders.
-    """
     attrs_df, basin_timeseries = load_all_basin_data()
 
     train_ts: Dict[str, pd.DataFrame] = {}
@@ -292,25 +244,13 @@ def build_dataloaders(
     stats = compute_normalization_stats(attrs_df, train_ts)
 
     train_samples = build_samples_for_one_split(
-        train_ts,
-        attrs_df,
-        stats,
-        seq_len=seq_len,
-        log_target=log_target,
+        train_ts, attrs_df, stats, seq_len=seq_len, log_target=log_target
     )
     val_samples = build_samples_for_one_split(
-        val_ts,
-        attrs_df,
-        stats,
-        seq_len=seq_len,
-        log_target=log_target,
+        val_ts, attrs_df, stats, seq_len=seq_len, log_target=log_target
     )
     test_samples = build_samples_for_one_split(
-        test_ts,
-        attrs_df,
-        stats,
-        seq_len=seq_len,
-        log_target=log_target,
+        test_ts, attrs_df, stats, seq_len=seq_len, log_target=log_target
     )
 
     train_dataset = StreamflowDataset(train_samples)
@@ -318,22 +258,13 @@ def build_dataloaders(
     test_dataset = StreamflowDataset(test_samples)
 
     train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
+        train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
     )
     val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
+        val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
     test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
+        test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
 
     metadata = {
