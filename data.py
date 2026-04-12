@@ -1,6 +1,9 @@
 """
 Data loading and preprocessing using MiniCamels
 """
+"""
+Data loading and preprocessing using MiniCamels
+"""
 from minicamels import MiniCamels
 
 def summarize_dataset():
@@ -14,16 +17,32 @@ def summarize_dataset():
     attrs_df = ds.attributes()
     n_static = attrs_df.shape[1]
 
+    # Debug: inspect actual column names
+    print("Basins columns:", basins_df.columns.tolist())
+    print("Attributes columns:", attrs_df.columns.tolist())
+
+    # Use the first column as basin ID
+    basin_id_col = basins_df.columns[0]
+    example_basin_id = str(basins_df.iloc[0][basin_id_col])
+
     # Load one basin to inspect variables and time
-    example_basin_id = basins_df.iloc[0]["gauge_id"]
     ts = ds.load_basin(example_basin_id)
 
     # Convert to dataframe
     df = ts.to_dataframe().reset_index()
+    print("Time series columns:", df.columns.tolist())
+
+    # Find time column safely
+    if "time" in df.columns:
+        time_col = "time"
+    elif "date" in df.columns:
+        time_col = "date"
+    else:
+        time_col = df.columns[0]
 
     # Time span
-    start_date = df["time"].min()
-    end_date = df["time"].max()
+    start_date = df[time_col].min()
+    end_date = df[time_col].max()
 
     # Variables
     dynamic_vars = ["prcp", "tmax", "tmin", "srad", "vp"]
@@ -35,4 +54,6 @@ def summarize_dataset():
     print(f"Dynamic variables: {', '.join(dynamic_vars)}")
     print(f"Target variable: {target_var}")
     print(f"Number of static attributes: {n_static}")
+    print(f"Example basin ID column: {basin_id_col}")
+    print(f"Example basin ID: {example_basin_id}")
     print("======================================\n")
