@@ -1,0 +1,57 @@
+1. Activate environment
+cd C:\Users\maria\OneDrive - University of Arizona\Documents\GitHub\HWRS640_HW4
+.venv\Scripts\activate
+
+2. (Optional) Install dependencies again
+Only if needed:
+
+pip install -r requirements.txt
+pip install geopandas pyogrio
+
+3. Check data pipeline
+python main.py summarize-data
+
+Confirms:
+basins loaded
+variables correct
+dataset OK
+
+4. Debug data loaders
+python main.py debug-data
+
+You should see:
+x_seq shape: [batch, seq_len, features]
+x_static shape
+y shape
+
+5. Debug model
+python main.py debug-model
+
+Confirms:
+forward pass works
+parameter count
+
+6. Train model
+python main.py train ^
+--seq-len 60 ^
+--batch-size 64 ^
+--epochs 5 ^
+--learning-rate 0.001
+
+Outputs:
+outputs/checkpoints/best_model.pt
+outputs/metrics/training_history.json
+
+7. Evaluate model
+python main.py evaluate ^
+--checkpoint outputs\checkpoints\best_model.pt
+
+Outputs:
+
+test NSE
+RMSE
+MAE
+
+8. Generate ALL plots
+python main.py plot ^
+--checkpoint outputs\checkpoints\best_model.pt
