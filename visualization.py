@@ -4,7 +4,7 @@ Plotting and visualization functions for streamflow prediction.
 
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -195,13 +195,14 @@ def compute_per_basin_metrics(results: Dict) -> pd.DataFrame:
 def get_basin_metadata() -> pd.DataFrame:
     """
     Load basin coordinates and static attributes from MiniCamels.
+    Returns a dataframe where basin_id is a normal column.
     """
     ds = MiniCamels()
     basins_df = ds.basins().copy()
     attrs_df = ds.attributes().copy()
 
-    attrs_df["basin_id"] = basins_df["basin_id"].astype(str).values
-    meta_df = attrs_df.copy()
+    meta_df = attrs_df.copy().reset_index(drop=True)
+    meta_df["basin_id"] = basins_df["basin_id"].astype(str).values
 
     if "basin_name" in basins_df.columns:
         meta_df["basin_name"] = basins_df["basin_name"].values
@@ -448,7 +449,6 @@ def generate_all_plots(
     saved["ranked_nse"] = plot_ranked_nse(metrics_df, output_dir=output_dir)
     saved["nse_vs_aridity"] = plot_nse_vs_aridity(metrics_df, meta_df, output_dir=output_dir)
 
-    # Also save the full metrics table for inspection
     metrics_csv = os.path.join(output_dir, "per_basin_metrics.csv")
     metrics_df.to_csv(metrics_csv, index=False)
     saved["per_basin_metrics_csv"] = metrics_csv
