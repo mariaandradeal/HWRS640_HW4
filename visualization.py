@@ -326,32 +326,97 @@ def plot_nse_map(
     metrics_df: pd.DataFrame,
     meta_df: pd.DataFrame,
     output_dir: str = "outputs/figures",
+    shapefile_dir: str = "shp",
 ) -> str:
     """
-    Map of basin NSE across all catchments.
+    Basin-level NSE map using user-provided shapefiles for continent,
+    drainage network, and lakes.
+
+    Expected files inside shapefile_dir:
+      - Americas.shp
+      - Estados_Unidos_Hidrografia.shp
+      - Estados_Unidos_Lagos.shp
     """
     ensure_dir(output_dir)
     _apply_clean_style()
 
-    df = metrics_df.merge(meta_df, on="basin_id", how="left")
+    import geopandas as gpd
 
-    plt.figure(figsize=(11, 6))
-    sc = plt.scatter(
-        df["lon"],
-        df["lat"],
-        c=df["nse"],
-        s=55,
-        cmap="viridis",
-        edgecolors="black",
-        linewidths=0.3,
+    df = metrics_df.merge(meta_df, on="basin_id", how="left").copy()
+
+    # Define NSE classes
+    bins = [-np.inf, 0.0, 0.3, 0.5, 0.65, 0.8, np.inf]
+    labels = [
+        "NSE < 0",
+        "0.00 – 0.30",
+        "0.30 – 0.50",
+        "0.50 – 0.65",
+        "0.65 – 0.80",
+        "NSE > 0.80",
+    ]
+    colors = [
+        "#d73027",  # red
+        "#fc8d59",  # orange
+        "#fee08b",  # yellow
+        "#91cf60",  # light green
+        "#1a9850",  # green
+        "#2c7bb6",  # blue
+    ]
+
+    df["nse_class"] = pd.cut(df["nse"], bins=bins, labels=labels, include_lowest=True)
+
+    # Read shapefiles
+    continent_path = os.path.join(shapefile_dir, "Americas.shp")
+    drainage_path = os.path.join(shapefile_dir, "Estados_Unidos_Hidrografia.shp")
+    lakes_path = os.path.join(shapefile_dir, "Estados_Unidos_Lagos.shp")
+
+    df_continent = gpd.read_file(continent_path)
+    df_drainage_network = gpd.read_file(drainage_path)
+    df_lakes = gpd.read_file(lakes_path)
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Background layers
+    df_continent.boundary.plot(color="black", ax=ax, lw=0.6, alpha=0.6)
+    df_drainage_network.plot(color="steelblue", ax=ax, lw=0.4, alpha=0.20)
+    df_lakes.plot(color="steelblue", ax=ax, lw=0.4, alpha=0.25)
+
+    # Plot each NSE class separately so legend matches classes
+    for cls, color in zip(labels, colors):
+        subset = df[df["nse_class"] == cls]
+        if len(subset) == 0:
+            continue
+
+        ax.scatter(
+            subset["lon"],
+            subset["lat"],
+            marker="o",
+            s=32,
+            color=color,
+            edgecolor="black",
+            linewidth=0.25,
+            label=cls,
+            zorder=3,
+        )
+
+    ax.set_xlabel("Longitude", fontsize=12)
+    ax.set_ylabel("Latitude", fontsize=12)
+    ax.set_xlim([-125, -66])
+    ax.set_ylim([20, 50])
+    ax.set_title("Basin-Level Test NSE Across MiniCAMELS", fontsize=16)
+
+    legend = ax.legend(
+        title="NSE class",
+        loc="lower left",
+        frameon=True,
+        fontsize=10,
+        title_fontsize=11,
     )
-    plt.colorbar(sc, label="Test NSE")
-    plt.xlabel("Longitude")
-    plt.ylabel("Latitude")
-    plt.title("Basin-Level Test NSE Across MiniCAMELS")
+    legend.get_frame().set_alpha(0.95)
+
     plt.tight_layout()
 
-    out_path = os.path.join(output_dir, "basin_nse_map.png")
+    out_path = os.path.join(output_dir, "basin_nse_map_classified.png")
     plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()
 
