@@ -46,6 +46,31 @@ def nse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     num = np.sum((y_true - y_pred) ** 2)
     return float(1.0 - num / denom)
 
+def kge(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Kling-Gupta Efficiency.
+    """
+    y_true = np.asarray(y_true).reshape(-1)
+    y_pred = np.asarray(y_pred).reshape(-1)
+
+    if len(y_true) < 2:
+        return float("nan")
+
+    mean_true = np.mean(y_true)
+    mean_pred = np.mean(y_pred)
+
+    std_true = np.std(y_true)
+    std_pred = np.std(y_pred)
+
+    if mean_true == 0 or std_true == 0:
+        return float("nan")
+
+    r = np.corrcoef(y_true, y_pred)[0, 1]
+    beta = mean_pred / mean_true
+    alpha = std_pred / std_true
+
+    return float(1 - np.sqrt((r - 1)**2 + (alpha - 1)**2 + (beta - 1)**2))
+
 
 def save_json(data: Dict, filepath: str) -> None:
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
