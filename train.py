@@ -11,7 +11,7 @@ import torch.nn as nn
 
 from data import build_dataloaders
 from model import create_model
-from utils import rmse, mae, nse, ensure_dir, save_json, set_seed
+from utils import rmse, mae, nse, kge, ensure_dir, save_json, set_seed
 
 
 def inverse_transform_target(y: np.ndarray, log_target: bool = True) -> np.ndarray:
@@ -93,6 +93,7 @@ def compute_epoch_metrics(
         "rmse": rmse(y_true, y_pred),
         "mae": mae(y_true, y_pred),
         "nse": nse(y_true, y_pred),
+        "kge": kge(y_true, y_pred),
     }
 
 
@@ -154,6 +155,8 @@ def train_model(
         "val_mae": [],
         "train_nse": [],
         "val_nse": [],
+        "train_kge": [],
+        "val_kge": [],
     }
 
     best_val_loss = float("inf")
@@ -196,11 +199,14 @@ def train_model(
         history["val_mae"].append(val_metrics["mae"])
         history["train_nse"].append(train_metrics["nse"])
         history["val_nse"].append(val_metrics["nse"])
+        history["train_kge"].append(train_metrics["kge"])
+        history["val_kge"].append(val_metrics["kge"])
 
         print(
             f"Epoch {epoch:03d}/{epochs:03d} | "
             f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | "
             f"Train NSE: {train_metrics['nse']:.4f} | Val NSE: {val_metrics['nse']:.4f}"
+            f"Train KGE: {train_metrics['kge']:.4f} | Val KGE: {val_metrics['kge']:.4f}"
         )
 
         if val_loss < best_val_loss:
