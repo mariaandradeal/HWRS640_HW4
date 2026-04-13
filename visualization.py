@@ -136,9 +136,20 @@ def plot_parity(
     output_dir: str = "outputs/figures",
     max_points: int = 4000,
 ) -> str:
+    """
+    Clean parity plot styled like a compact report figure.
+    """
     ensure_dir(output_dir)
-    _apply_clean_style()
 
+    obs = np.asarray(obs).reshape(-1)
+    pred = np.asarray(pred).reshape(-1)
+
+    # Remove NaNs/infs
+    mask = np.isfinite(obs) & np.isfinite(pred)
+    obs = obs[mask]
+    pred = pred[mask]
+
+    # Subsample for readability
     if len(obs) > max_points:
         idx = np.random.choice(len(obs), size=max_points, replace=False)
         obs_plot = obs[idx]
@@ -147,15 +158,37 @@ def plot_parity(
         obs_plot = obs
         pred_plot = pred
 
-    min_val = float(min(obs_plot.min(), pred_plot.min()))
-    max_val = float(max(obs_plot.max(), pred_plot.max()))
+    # Compact axis range using 99th percentile
+    max_val = float(np.percentile(np.concatenate([obs_plot, pred_plot]), 99))
+    max_val = max(max_val, 1.0)
 
-    plt.figure(figsize=(6.5, 6))
-    plt.scatter(obs_plot, pred_plot, s=12, alpha=0.35)
-    plt.plot([min_val, max_val], [min_val, max_val], linestyle="--", linewidth=1.5)
+    plt.figure(figsize=(4.2, 4.0))
+
+    plt.scatter(
+        obs_plot,
+        pred_plot,
+        s=10,
+        alpha=0.45,
+        edgecolors="none",
+        label="Prediction",
+    )
+
+    plt.plot(
+        [0, max_val],
+        [0, max_val],
+        linestyle="--",
+        linewidth=1.2,
+        color="red",
+    )
+
     plt.xlabel("Observed Streamflow")
     plt.ylabel("Predicted Streamflow")
-    plt.title("Parity Plot: Predicted vs Observed")
+    #plt.title("Observed vs Predicted Streamflow", fontsize=10)
+
+    plt.xlim(0, max_val)
+    plt.ylim(0, max_val)
+
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "parity_plot.png")
@@ -457,19 +490,60 @@ def plot_nse_vs_aridity(
     output_dir: str = "outputs/figures",
 ) -> str:
     """
-    Scatter plot of NSE versus aridity.
+    Improved scatter plot of basin NSE versus aridity.
     """
     ensure_dir(output_dir)
     _apply_clean_style()
 
     df = metrics_df.merge(meta_df[["basin_id", "aridity"]], on="basin_id", how="left")
+    df = df.dropna(subset=["aridity", "nse"]).copy()
 
     plt.figure(figsize=(7.5, 5.5))
-    plt.scatter(df["aridity"], df["nse"], s=45, alpha=0.8)
-    plt.axhline(0.0, linestyle="--", linewidth=1.2)
+    plt.scatter(
+        df["aridity"],
+        df["nse"],
+        s=45,
+        alpha=0.8,
+        edgecolor="black",
+        linewidth=0.3,
+    )
+
+    # Horizontal reference line
+    plt.axhline(0.0, linestyle="--", linewidth=1.2, color="black")
+
+    # Linear trend line
+    x = df["aridity"].values
+    y = df["nse"].values
+    if len(x) >= 2:
+        coef = np.polyfit(x, y, 1)
+        xfit = np.linspace(x.min(), x.max(), 200)
+        yfit = coef[0] * xfit + coef[1]
+        plt.plot(xfit, yfit, color="red", linewidth=1.5, label="Trend")
+
+    # Annotate best and worst basins
+    best_idx = df["nse"].idxmax()
+    worst_idx = df["nse"].idxmin()
+
+    plt.annotate(
+        df.loc[best_idx, "basin_id"],
+        (df.loc[best_idx, "aridity"], df.loc[best_idx, "nse"]),
+        xytext=(5, 5),
+        textcoords="offset points",
+        fontsize=8,
+    )
+
+    plt.annotate(
+        df.loc[worst_idx, "basin_id"],
+        (df.loc[worst_idx, "aridity"], df.loc[worst_idx, "nse"]),
+        xytext=(5, -10),
+        textcoords="offset points",
+        fontsize=8,
+    )
+
     plt.xlabel("Aridity")
     plt.ylabel("Test NSE")
     plt.title("Basin-Level Test NSE vs Aridity")
+    plt.legend(frameon=True)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "nse_vs_aridity.png")
