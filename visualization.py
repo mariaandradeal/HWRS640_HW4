@@ -512,13 +512,13 @@ def plot_nse_vs_aridity(
     plt.axhline(0.0, linestyle="--", linewidth=1.2, color="black")
 
     # Linear trend line
-    x = df["aridity"].values
-    y = df["nse"].values
-    if len(x) >= 2:
-        coef = np.polyfit(x, y, 1)
-        xfit = np.linspace(x.min(), x.max(), 200)
-        yfit = coef[0] * xfit + coef[1]
-        plt.plot(xfit, yfit, color="red", linewidth=1.5, label="Trend")
+   # x = df["aridity"].values
+    #y = df["nse"].values
+    #if len(x) >= 2:
+    #    coef = np.polyfit(x, y, 1)
+    #    xfit = np.linspace(x.min(), x.max(), 200)
+    #    yfit = coef[0] * xfit + coef[1]
+    #    plt.plot(xfit, yfit, color="red", linewidth=1.5, label="Trend")
 
     # Annotate best and worst basins
     best_idx = df["nse"].idxmax()
