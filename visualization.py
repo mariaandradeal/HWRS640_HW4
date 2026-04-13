@@ -134,74 +134,39 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 
-def plot_parity(y_true, y_pred, output_dir="outputs/figures"):
-    """
-    Improved parity plot: Predicted vs Observed
-    """
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
+def plot_parity(
+    obs: np.ndarray,
+    pred: np.ndarray,
+    output_dir: str = "outputs/figures",
+    max_points: int = 4000,
+) -> str:
+    ensure_dir(output_dir)
+    _apply_clean_style()
 
-    # Flatten
-    y_true = np.asarray(y_true).flatten()
-    y_pred = np.asarray(y_pred).flatten()
+    if len(obs) > max_points:
+        idx = np.random.choice(len(obs), size=max_points, replace=False)
+        obs_plot = obs[idx]
+        pred_plot = pred[idx]
+    else:
+        obs_plot = obs
+        pred_plot = pred
 
-    # Remove NaNs
-    mask = np.isfinite(y_true) & np.isfinite(y_pred)
-    y_true = y_true[mask]
-    y_pred = y_pred[mask]
+    min_val = float(min(obs_plot.min(), pred_plot.min()))
+    max_val = float(max(obs_plot.max(), pred_plot.max()))
 
-    # Axis limits (robust)
-    max_val = np.percentile(np.concatenate([y_true, y_pred]), 99)
-    max_val = max(max_val, 1.0)
-
-    # Figure
-    plt.figure(figsize=(6, 6))
-
-    # Scatter
-    plt.scatter(
-        y_true,
-        y_pred,
-        s=10,
-        alpha=0.4,
-        color="#1f77b4",
-        edgecolors="none",
-        label="Prediction"
-    )
-
-    # 1:1 line (RED)
-    plt.plot(
-        [0, max_val],
-        [0, max_val],
-        linestyle="--",
-        linewidth=1.8,
-        color="red",
-        label="1:1 line"
-    )
-
-    # Labels
-    plt.xlabel("Observed Streamflow", fontsize=11)
-    plt.ylabel("Predicted Streamflow", fontsize=11)
-
-    # Limits
-    plt.xlim(0, max_val)
-    plt.ylim(0, max_val)
-
-    # Grid
-    plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
-
-    # Legend (clean)
-    plt.legend(frameon=False, fontsize=9)
-
-    # Square aspect (nice touch)
-    plt.gca().set_aspect('equal', adjustable='box')
-
+    plt.figure(figsize=(6.5, 6))
+    plt.scatter(obs_plot, pred_plot, s=12, alpha=0.35)
+    plt.plot([min_val, max_val], [min_val, max_val], linestyle="--", linewidth=1.5)
+    plt.xlabel("Observed Streamflow")
+    plt.ylabel("Predicted Streamflow")
+    #plt.title("Parity Plot: Predicted vs Observed")
     plt.tight_layout()
 
-    # Save
-    save_path = Path(output_dir) / "parity_plot.png"
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    out_path = os.path.join(output_dir, "parity_plot.png")
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    return str(save_path)
+    return out_path
 
 
 def compute_per_basin_metrics(results: Dict) -> pd.DataFrame:
