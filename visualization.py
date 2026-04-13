@@ -15,7 +15,7 @@ import torch
 from data import build_dataloaders
 from minicamels import MiniCamels
 from train import load_checkpoint, inverse_transform_target
-from utils import ensure_dir, nse, rmse, mae
+from utils import ensure_dir, nse, rmse, mae, kge
 
 
 def load_history(history_path: str) -> Dict:
@@ -186,6 +186,7 @@ def compute_per_basin_metrics(results: Dict) -> pd.DataFrame:
             "nse": float(nse(obs, pred)),
             "rmse": float(rmse(obs, pred)),
             "mae": float(mae(obs, pred)),
+            "kge": float(kge(obs, pred)),
         })
 
     df = pd.DataFrame(rows).sort_values("nse", ascending=False).reset_index(drop=True)
