@@ -9,9 +9,11 @@ from typing import Dict, List, Optional
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
 
 from data import build_dataloaders
+from minicamels import MiniCamels
 from train import load_checkpoint, inverse_transform_target
 from utils import ensure_dir, nse, rmse, mae
 
@@ -163,9 +165,9 @@ def plot_parity(
     return out_path
 
 
-def compute_per_basin_metrics(results: Dict) -> List[Dict]:
+def compute_per_basin_metrics(results: Dict) -> pd.DataFrame:
     """
-    Compute NSE, RMSE, and MAE for each basin on the test set.
+    Compute per-basin test metrics.
     """
     basin_ids = np.unique(results["basin_id"])
     rows = []
@@ -186,27 +188,35 @@ def compute_per_basin_metrics(results: Dict) -> List[Dict]:
             "mae": float(mae(obs, pred)),
         })
 
-    rows.sort(key=lambda x: x["nse"], reverse=True)
-    return rows
+    df = pd.DataFrame(rows).sort_values("nse", ascending=False).reset_index(drop=True)
+    return df
 
 
-def get_best_and_worst_basin(results: Dict) -> Dict:
+def get_basin_metadata() -> pd.DataFrame:
     """
-    Return best and worst basin by test NSE.
+    Load basin coordinates and static attributes from MiniCamels.
     """
-    rows = compute_per_basin_metrics(results)
+    ds = MiniCamels()
+    basins_df = ds.basins().copy()
+    attrs_df = ds.attributes().copy()
 
-    valid_rows = [r for r in rows if not np.isnan(r["nse"])]
-    if len(valid_rows) == 0:
-        raise ValueError("No valid basin-level NSE values found.")
+    attrs_df["basin_id"] = basins_df["basin_id"].astype(str).values
+    meta_df = attrs_df.copy()
 
-    best = valid_rows[0]
-    worst = valid_rows[-1]
+    if "basin_name" in basins_df.columns:
+        meta_df["basin_name"] = basins_df["basin_name"].values
+
+    return meta_df
+
+
+def get_best_and_worst_basin(metrics_df: pd.DataFrame) -> Dict:
+    valid_df = metrics_df.dropna(subset=["nse"]).copy()
+    best = valid_df.iloc[0].to_dict()
+    worst = valid_df.iloc[-1].to_dict()
 
     return {
         "best": best,
         "worst": worst,
-        "all_metrics": valid_rows,
     }
 
 
@@ -218,9 +228,6 @@ def plot_test_timeseries(
     title_prefix: str = "",
     filename_prefix: str = "",
 ) -> str:
-    """
-    Plot observed vs predicted streamflow for one basin.
-    """
     ensure_dir(output_dir)
     _apply_clean_style()
 
@@ -272,15 +279,13 @@ def plot_test_timeseries(
 
 def plot_best_and_worst_basins(
     results: Dict,
+    metrics_df: pd.DataFrame,
     output_dir: str = "outputs/figures",
     max_points: int = 365,
 ) -> Dict:
-    """
-    Generate time-series plots for best and worst test basins.
-    """
     ensure_dir(output_dir)
 
-    summary = get_best_and_worst_basin(results)
+    summary = get_best_and_worst_basin(metrics_df)
     best = summary["best"]
     worst = summary["worst"]
 
@@ -289,7 +294,7 @@ def plot_best_and_worst_basins(
         basin_id=best["basin_id"],
         output_dir=output_dir,
         max_points=max_points,
-        title_prefix="Best Test Basin",
+        title_prefix="Best Test",
         filename_prefix="best_",
     )
 
@@ -298,7 +303,7 @@ def plot_best_and_worst_basins(
         basin_id=worst["basin_id"],
         output_dir=output_dir,
         max_points=max_points,
-        title_prefix="Worst Test Basin",
+        title_prefix="Worst Test",
         filename_prefix="worst_",
     )
 
@@ -313,8 +318,98 @@ def plot_best_and_worst_basins(
         "worst_basin_rmse": worst["rmse"],
         "worst_basin_mae": worst["mae"],
         "worst_plot": worst_path,
-        "all_metrics": summary["all_metrics"],
     }
+
+
+def plot_nse_map(
+    metrics_df: pd.DataFrame,
+    meta_df: pd.DataFrame,
+    output_dir: str = "outputs/figures",
+) -> str:
+    """
+    Map of basin NSE across all catchments.
+    """
+    ensure_dir(output_dir)
+    _apply_clean_style()
+
+    df = metrics_df.merge(meta_df, on="basin_id", how="left")
+
+    plt.figure(figsize=(11, 6))
+    sc = plt.scatter(
+        df["lon"],
+        df["lat"],
+        c=df["nse"],
+        s=55,
+        cmap="viridis",
+        edgecolors="black",
+        linewidths=0.3,
+    )
+    plt.colorbar(sc, label="Test NSE")
+    plt.xlabel("Longitude")
+    plt.ylabel("Latitude")
+    plt.title("Basin-Level Test NSE Across MiniCAMELS")
+    plt.tight_layout()
+
+    out_path = os.path.join(output_dir, "basin_nse_map.png")
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    return out_path
+
+
+def plot_ranked_nse(
+    metrics_df: pd.DataFrame,
+    output_dir: str = "outputs/figures",
+) -> str:
+    """
+    Ranked basin NSE plot.
+    """
+    ensure_dir(output_dir)
+    _apply_clean_style()
+
+    df = metrics_df.sort_values("nse", ascending=False).reset_index(drop=True)
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(np.arange(1, len(df) + 1), df["nse"], marker="o", linewidth=1.5)
+    plt.axhline(0.0, linestyle="--", linewidth=1.2)
+    plt.xlabel("Basin Rank")
+    plt.ylabel("Test NSE")
+    plt.title("Ranked Basin-Level Test NSE")
+    plt.tight_layout()
+
+    out_path = os.path.join(output_dir, "ranked_basin_nse.png")
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    return out_path
+
+
+def plot_nse_vs_aridity(
+    metrics_df: pd.DataFrame,
+    meta_df: pd.DataFrame,
+    output_dir: str = "outputs/figures",
+) -> str:
+    """
+    Scatter plot of NSE versus aridity.
+    """
+    ensure_dir(output_dir)
+    _apply_clean_style()
+
+    df = metrics_df.merge(meta_df[["basin_id", "aridity"]], on="basin_id", how="left")
+
+    plt.figure(figsize=(7.5, 5.5))
+    plt.scatter(df["aridity"], df["nse"], s=45, alpha=0.8)
+    plt.axhline(0.0, linestyle="--", linewidth=1.2)
+    plt.xlabel("Aridity")
+    plt.ylabel("Test NSE")
+    plt.title("Basin-Level Test NSE vs Aridity")
+    plt.tight_layout()
+
+    out_path = os.path.join(output_dir, "nse_vs_aridity.png")
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    return out_path
 
 
 def generate_all_plots(
@@ -324,7 +419,7 @@ def generate_all_plots(
     batch_size: int = 64,
 ) -> Dict:
     """
-    Generate all main plots, including best and worst basin plots.
+    Generate all main plots, including basin-level variability plots.
     """
     ensure_dir(output_dir)
     saved = {}
@@ -336,14 +431,26 @@ def generate_all_plots(
         saved["history_plots"] = []
 
     results = collect_test_predictions(checkpoint_path, batch_size=batch_size)
+    metrics_df = compute_per_basin_metrics(results)
+    meta_df = get_basin_metadata()
 
     saved["parity_plot"] = plot_parity(results["obs"], results["pred"], output_dir=output_dir)
 
-    basin_summary = plot_best_and_worst_basins(
+    best_worst = plot_best_and_worst_basins(
         results=results,
+        metrics_df=metrics_df,
         output_dir=output_dir,
         max_points=365,
     )
-    saved["best_worst_summary"] = basin_summary
+    saved["best_worst_summary"] = best_worst
+
+    saved["nse_map"] = plot_nse_map(metrics_df, meta_df, output_dir=output_dir)
+    saved["ranked_nse"] = plot_ranked_nse(metrics_df, output_dir=output_dir)
+    saved["nse_vs_aridity"] = plot_nse_vs_aridity(metrics_df, meta_df, output_dir=output_dir)
+
+    # Also save the full metrics table for inspection
+    metrics_csv = os.path.join(output_dir, "per_basin_metrics.csv")
+    metrics_df.to_csv(metrics_csv, index=False)
+    saved["per_basin_metrics_csv"] = metrics_csv
 
     return saved
