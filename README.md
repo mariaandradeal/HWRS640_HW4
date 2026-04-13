@@ -3,7 +3,6 @@
 This project implements a sequence model (LSTM) to predict daily streamflow using the MiniCAMELS dataset.
 
 ## Structure
-
 - main.py: CLI entry point
 - data.py: data loading and preprocessing
 - model.py: model definition
@@ -12,6 +11,5 @@ This project implements a sequence model (LSTM) to predict daily streamflow usin
 - visualization.py: plotting utilities
 
 ## Setup
-
 ```bash
 pip install -r requirements.txt
