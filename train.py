@@ -316,6 +316,7 @@ def evaluate_model(
         "test_rmse": test_metrics["rmse"],
         "test_mae": test_metrics["mae"],
         "test_nse": test_metrics["nse"],
+        "test_kge": test_metrics["kge"],
     }
 
     return results
