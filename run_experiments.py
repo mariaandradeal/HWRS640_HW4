@@ -4,10 +4,10 @@ Run multiple training experiments automatically and save results to CSV.
 This script:
 1. Defines a grid of hyperparameter combinations
 2. Runs `python main.py train ...` for each combination
-3. Captures stdout from training
+3. Shows stdout live during training
 4. Parses the final epoch metrics
 5. Saves all experiment results to a CSV file
-
+6. Saves one log file per run
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 import csv
 import itertools
-import os
 import re
 import subprocess
 import sys
@@ -51,7 +50,7 @@ def parse_args() -> argparse.Namespace:
         "--log-dir",
         type=str,
         default="experiment_logs",
-        help="Directory to store stdout logs for each run."
+        help="Directory to store logs for each run."
     )
     parser.add_argument(
         "--epochs",
@@ -119,14 +118,43 @@ def safe_float(value: str) -> Optional[float]:
         return None
 
 
+def normalize_output_for_parsing(text: str) -> str:
+    """
+    Clean training stdout so regex parsing still works even if some metrics
+    wrap to the next line.
+
+    Example of wrapped output:
+    Epoch 001/005 | Train Loss: ... | Val NSE: 0.6277Train KGE: 0.6044 | Val KGE:
+    0.6305
+
+    This function inserts missing separators and flattens line breaks.
+    """
+    cleaned = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # If Val NSE and Train KGE got glued together
+    cleaned = re.sub(r"(Val NSE:\s*[-+eE0-9\.]+)(Train KGE:)", r"\1 | \2", cleaned)
+
+    # If Val KGE: is followed by a newline and then the number
+    cleaned = re.sub(r"(Val KGE:\s*)\n\s*([-+eE0-9\.]+)", r"\1\2", cleaned)
+
+    # Flatten remaining newlines to spaces for robust regex parsing
+    cleaned = cleaned.replace("\n", " ")
+
+    # Collapse repeated spaces
+    cleaned = re.sub(r"\s+", " ", cleaned)
+
+    return cleaned
+
+
 def parse_final_metrics(stdout_text: str) -> Dict[str, Optional[float]]:
     """
     Parse the final epoch metrics from training stdout.
 
-    Expected line style:
-    Epoch 005/010 | Train Loss: 0.1004 | Val Loss: 0.0742 | Train NSE: 0.5565 | Val NSE: 0.6206 | Train KGE: 0.6142 | Val KGE: 0.6185
+    Expected style:
+    Epoch 005/010 | Train Loss: 0.1004 | Val Loss: 0.0742 |
+    Train NSE: 0.5565 | Val NSE: 0.6206 | Train KGE: 0.6142 | Val KGE: 0.6185
 
-    This function searches all matching epoch lines and keeps the LAST one.
+    Handles wrapped lines as well.
     """
     metrics = {
         "train_loss": None,
@@ -136,9 +164,11 @@ def parse_final_metrics(stdout_text: str) -> Dict[str, Optional[float]]:
         "train_kge": None,
         "val_kge": None,
         "final_epoch": None,
+        "total_epochs": None,
     }
 
-    # Flexible regex: handles spacing variations and optional separators
+    cleaned = normalize_output_for_parsing(stdout_text)
+
     pattern = re.compile(
         r"Epoch\s*\[?(?P<epoch>\d+)\s*/\s*(?P<total>\d+)\]?"
         r".*?Train Loss:\s*(?P<train_loss>[-+eE0-9\.]+)"
@@ -150,12 +180,13 @@ def parse_final_metrics(stdout_text: str) -> Dict[str, Optional[float]]:
         re.IGNORECASE
     )
 
-    matches = list(pattern.finditer(stdout_text))
+    matches = list(pattern.finditer(cleaned))
     if not matches:
         return metrics
 
     last = matches[-1]
     metrics["final_epoch"] = int(last.group("epoch"))
+    metrics["total_epochs"] = int(last.group("total"))
     metrics["train_loss"] = safe_float(last.group("train_loss"))
     metrics["val_loss"] = safe_float(last.group("val_loss"))
     metrics["train_nse"] = safe_float(last.group("train_nse"))
@@ -216,6 +247,7 @@ def run_one_experiment(
 ) -> Dict[str, object]:
     """
     Run a single training experiment and return a result dictionary.
+    Shows live output while also capturing it for parsing and logging.
     """
     cmd = build_command(
         python_exe=python_exe,
@@ -230,34 +262,47 @@ def run_one_experiment(
         extra_args=extra_args,
     )
 
-    print("=" * 90)
+    print("=" * 100)
     print(f"Run {run_id}")
     print("Command:", " ".join(cmd))
 
     start_time = datetime.now()
+    stdout_lines: List[str] = []
 
-    completed = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        with subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        ) as process:
+            assert process.stdout is not None
+
+            for line in process.stdout:
+                print(line, end="")   # live display
+                stdout_lines.append(line)
+
+            process.wait()
+            return_code = process.returncode
+
+    except KeyboardInterrupt:
+        print("\nInterrupted by user.")
+        return_code = -999
 
     end_time = datetime.now()
     runtime_seconds = (end_time - start_time).total_seconds()
 
-    stdout_text = completed.stdout or ""
-    stderr_text = completed.stderr or ""
+    stdout_text = "".join(stdout_lines)
 
     log_path = log_dir / f"run_{run_id:03d}.log"
     with open(log_path, "w", encoding="utf-8") as f:
         f.write("COMMAND:\n")
         f.write(" ".join(cmd) + "\n\n")
-        f.write("STDOUT:\n")
+        f.write("OUTPUT:\n")
         f.write(stdout_text)
-        f.write("\n\nSTDERR:\n")
-        f.write(stderr_text)
 
     metrics = parse_final_metrics(stdout_text)
 
@@ -266,7 +311,7 @@ def run_one_experiment(
         "timestamp_start": start_time.isoformat(timespec="seconds"),
         "timestamp_end": end_time.isoformat(timespec="seconds"),
         "runtime_seconds": runtime_seconds,
-        "return_code": completed.returncode,
+        "return_code": return_code,
         "seq_len": seq_len,
         "batch_size": batch_size,
         "epochs": epochs,
@@ -281,24 +326,26 @@ def run_one_experiment(
         "train_kge": metrics["train_kge"],
         "val_kge": metrics["val_kge"],
         "final_epoch": metrics["final_epoch"],
+        "total_epochs_reported": metrics["total_epochs"],
         "log_file": str(log_path),
         "command": " ".join(cmd),
     }
 
-    print(f"Return code: {completed.returncode}")
+    print("-" * 100)
+    print(f"Run {run_id} finished")
+    print(f"Return code: {return_code}")
     print(f"Runtime (s): {runtime_seconds:.1f}")
     print(
         "Parsed metrics:",
         {
-            "val_nse": result["val_nse"],
-            "val_kge": result["val_kge"],
+            "train_loss": result["train_loss"],
             "val_loss": result["val_loss"],
+            "train_nse": result["train_nse"],
+            "val_nse": result["val_nse"],
+            "train_kge": result["train_kge"],
+            "val_kge": result["val_kge"],
         }
     )
-
-    if completed.returncode != 0:
-        print("stderr preview:")
-        print(stderr_text[:1000])
 
     return result
 
@@ -329,6 +376,7 @@ def append_result_to_csv(csv_path: Path, row: Dict[str, object]) -> None:
         "train_kge",
         "val_kge",
         "final_epoch",
+        "total_epochs_reported",
         "log_file",
         "command",
     ]
@@ -368,7 +416,14 @@ def main() -> None:
     print(f"Results CSV: {output_csv.resolve()}")
     print(f"Logs directory: {log_dir.resolve()}")
 
-    for run_id, (seq_len, batch_size, learning_rate, hidden_size, num_layers, dropout) in enumerate(combinations, start=1):
+    for run_id, (
+        seq_len,
+        batch_size,
+        learning_rate,
+        hidden_size,
+        num_layers,
+        dropout,
+    ) in enumerate(combinations, start=1):
         result = run_one_experiment(
             run_id=run_id,
             python_exe=args.python_exe,
@@ -383,9 +438,15 @@ def main() -> None:
             dropout=dropout,
             extra_args=args.extra_args,
         )
+
         append_result_to_csv(output_csv, result)
 
-    print("\nAll experiments completed.")
+        # Optional: stop if user interrupted
+        if result["return_code"] == -999:
+            print("\nExperiment loop stopped by user.")
+            break
+
+    print("\nAll requested experiments completed.")
     print(f"Results saved to: {output_csv.resolve()}")
 
 
