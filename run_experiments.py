@@ -8,7 +8,6 @@ This script:
 4. Parses the final epoch metrics
 5. Saves all experiment results to a CSV file
 
-Author: Maria + ChatGPT
 """
 
 from __future__ import annotations
