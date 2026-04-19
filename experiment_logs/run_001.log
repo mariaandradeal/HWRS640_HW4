@@ -1,0 +1,17 @@
+COMMAND:
+C:\Users\maria\OneDrive - University of Arizona\Documents\GitHub\HWRS640_HW4\.venv\Scripts\python.exe main.py train --seq-len 30 --batch-size 64 --epochs 5 --learning-rate 0.001 --hidden-size 64 --num-layers 1 --dropout 0.1
+
+OUTPUT:
+Using device: cpu
+Training samples: 352704
+Validation samples: 89800
+Test samples: 89800
+Epoch 001/005 | Train Loss: 0.0974 | Val Loss: 0.0775 | Train NSE: 0.5546 | Val NSE: 0.6277Train KGE: 0.6044 | Val KGE: 0.6305
+Epoch 002/005 | Train Loss: 0.0793 | Val Loss: 0.0756 | Train NSE: 0.6139 | Val NSE: 0.6086Train KGE: 0.6550 | Val KGE: 0.5531
+Epoch 003/005 | Train Loss: 0.0750 | Val Loss: 0.0744 | Train NSE: 0.6212 | Val NSE: 0.6343Train KGE: 0.6698 | Val KGE: 0.6710
+Epoch 004/005 | Train Loss: 0.0718 | Val Loss: 0.0705 | Train NSE: 0.6301 | Val NSE: 0.6376Train KGE: 0.6737 | Val KGE: 0.6367
+Epoch 005/005 | Train Loss: 0.0698 | Val Loss: 0.0732 | Train NSE: 0.6398 | Val NSE: 0.6336Train KGE: 0.6861 | Val KGE: 0.6544
+
+Training complete.
+Best checkpoint: outputs\checkpoints\best_model.pt
+History saved to: outputs\metrics\training_history.json
