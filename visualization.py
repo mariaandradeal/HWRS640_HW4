@@ -32,15 +32,26 @@ def load_history(history_path: str) -> Dict:
 
 def _apply_clean_style():
     plt.rcParams.update({
-        "figure.figsize": (8, 5),
+        "figure.figsize": (7.2, 4.2),
+        "figure.facecolor": "white",
+        "axes.facecolor": "#f0f0f0",
+        "axes.edgecolor": "black",
+        "axes.linewidth": 0.8,
         "axes.grid": True,
-        "grid.alpha": 0.25,
-        "axes.titlesize": 16,
-        "axes.labelsize": 12,
-        "legend.fontsize": 11,
-        "xtick.labelsize": 10,
-        "ytick.labelsize": 10,
-        "lines.linewidth": 2.0,
+        "grid.color": "#bdbdbd",
+        "grid.linestyle": "-",
+        "grid.linewidth": 0.6,
+        "grid.alpha": 0.8,
+        "axes.titlesize": 11,
+        "axes.labelsize": 9,
+        "legend.fontsize": 8,
+        "legend.frameon": True,
+        "legend.facecolor": "white",
+        "legend.edgecolor": "black",
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "lines.linewidth": 1.0,
+        "savefig.dpi": 300,
     })
 
 
@@ -121,6 +132,7 @@ def plot_precip_and_streamflow_one_basin(
 ) -> str:
     """
     Plot precipitation and streamflow for one basin over the same period.
+    Styled to resemble the user's example figure.
     """
     ensure_dir(output_dir)
     _apply_clean_style()
@@ -134,25 +146,57 @@ def plot_precip_and_streamflow_one_basin(
     if len(df) > max_points:
         df = df.iloc[:max_points].copy()
 
-    fig, ax1 = plt.subplots(figsize=(11, 5.5))
-
-    ax1.plot(df["time"], df["qobs"], label="Streamflow (qobs)")
-    ax1.set_xlabel("Date")
-    ax1.set_ylabel("Observed Streamflow (qobs)")
-
+    fig, ax1 = plt.subplots(figsize=(6.3, 3.2))
     ax2 = ax1.twinx()
-    ax2.bar(df["time"], df["prcp"], width=2.0, alpha=0.35, label="Precipitation (prcp)")
-    ax2.set_ylabel("Precipitation (prcp)")
+
+    # Streamflow as black line
+    ax1.plot(
+        df["time"],
+        df["qobs"],
+        color="black",
+        linewidth=0.9,
+        label="Q"
+    )
+
+    # Precipitation as red points
+    ax2.scatter(
+        df["time"],
+        df["prcp"],
+        color="red",
+        s=5,
+        marker="s",
+        linewidths=0.0,
+        alpha=0.9,
+        label="P"
+    )
+
+    ax1.set_xlabel("Date")
+    ax1.set_ylabel("Q [mm/day]")
+    ax2.set_ylabel("P [mm/day]")
+
+    ax1.set_title(f"Basin {basin_id}: Streamflow and Precipitation", pad=6)
+
+    # Make right axis inverted like many hydro-climate plots, if desired
+    ax2.invert_yaxis()
 
     lines_1, labels_1 = ax1.get_legend_handles_labels()
     lines_2, labels_2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper right", frameon=True)
+    ax1.legend(
+        lines_1 + lines_2,
+        labels_1 + labels_2,
+        loc="lower left",
+        fontsize=7,
+        handlelength=1.5,
+        borderpad=0.3,
+    )
 
-    plt.title(f"Precipitation and Streamflow for Basin {basin_id}")
+    ax1.xaxis.set_major_locator(mdates.YearLocator(5))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, f"explore_precip_streamflow_basin_{basin_id}.png")
-    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.savefig(out_path, bbox_inches="tight")
     plt.close()
 
     return out_path
@@ -182,15 +226,22 @@ def plot_qobs_histogram(
 
     qobs = np.concatenate(all_qobs)
 
-    plt.figure(figsize=(8, 5.5))
-    plt.hist(qobs, bins=50, alpha=0.85)
+    plt.figure(figsize=(5.6, 4.0))
+    plt.hist(
+        qobs,
+        bins=50,
+        color="#6baed6",
+        edgecolor="black",
+        linewidth=0.5,
+        alpha=0.85,
+    )
     plt.xlabel("Observed Streamflow (qobs)")
     plt.ylabel("Frequency")
     plt.title("Histogram of Observed Streamflow")
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "explore_qobs_histogram.png")
-    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.savefig(out_path, bbox_inches="tight")
     plt.close()
 
     return out_path
@@ -211,22 +262,23 @@ def plot_static_attribute_scatter(
     df = attrs_df.copy().reset_index(drop=True)
     df = df[[x_attr, y_attr]].dropna()
 
-    plt.figure(figsize=(7.5, 5.5))
+    plt.figure(figsize=(5.6, 4.4))
     plt.scatter(
         df[x_attr],
         df[y_attr],
-        s=45,
-        alpha=0.8,
+        s=18,
+        color="#6baed6",
         edgecolor="black",
         linewidth=0.3,
+        alpha=0.8,
     )
     plt.xlabel(x_attr.replace("_", " ").title())
     plt.ylabel(y_attr.replace("_", " ").title())
-    plt.title(f"Static Attribute Scatter: {x_attr} vs {y_attr}")
+    plt.title(f"{x_attr.replace('_', ' ').title()} vs {y_attr.replace('_', ' ').title()}")
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, f"explore_static_scatter_{x_attr}_vs_{y_attr}.png")
-    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.savefig(out_path, bbox_inches="tight")
     plt.close()
 
     return out_path
@@ -394,15 +446,31 @@ def plot_parity(
     min_val = float(min(obs_plot.min(), pred_plot.min()))
     max_val = float(max(obs_plot.max(), pred_plot.max()))
 
-    plt.figure(figsize=(6.5, 6))
-    plt.scatter(obs_plot, pred_plot, s=12, alpha=0.35)
-    plt.plot([min_val, max_val], [min_val, max_val], linestyle="--", linewidth=1.5)
+    plt.figure(figsize=(3.8, 4.6))
+    plt.scatter(
+        obs_plot,
+        pred_plot,
+        s=14,
+        color="#6baed6",
+        edgecolor="none",
+        alpha=0.8,
+    )
+    plt.plot(
+        [min_val, max_val],
+        [min_val, max_val],
+        linestyle="--",
+        linewidth=1.0,
+        color="red",
+        label="Prediction",
+    )
     plt.xlabel("Observed Streamflow")
     plt.ylabel("Predicted Streamflow")
+    plt.title("Observed vs Predicted Streamflow")
+    plt.legend(loc="upper left", fontsize=7)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "parity_plot.png")
-    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.savefig(out_path, bbox_inches="tight")
     plt.close()
 
     return out_path
