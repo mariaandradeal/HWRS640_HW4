@@ -21,7 +21,7 @@ from train import load_checkpoint, inverse_transform_target
 from utils import ensure_dir, nse, rmse, mae, kge
 
 
-# ============================================================
+# =====================F=======================================
 # GENERAL HELPERS
 # ============================================================
 
@@ -149,14 +149,14 @@ def plot_precip_and_streamflow_one_basin(
         label="Q",
         zorder=3,
     )
-    q_pts = axQ.scatter(
-        x,
-        q_obs,
-        color="red",
-        s=10,
-        label="Qobs",
-        zorder=4,
-    )
+    #q_pts = axQ.scatter(
+    #    x,
+    #    q_obs,
+    #    color="red",
+    #    s=10,
+    #    label="Qobs",
+    #    zorder=4,
+    #)
 
     axQ.set_ylabel(r"$Q\ [mm/day]$")
     axQ.set_xlabel("Time (Test Period Days)")
