@@ -30,30 +30,20 @@ def load_history(history_path: str) -> Dict:
         return json.load(f)
 
 
-def _apply_clean_style():
+def _reset_plot_style():
     """
-    Compact gray-background style closer to the example figures.
+    Keep styling very close to the user's reference snippet:
+    simple matplotlib defaults + moderate grid + compact fonts.
     """
+    plt.rcdefaults()
     plt.rcParams.update({
-        "figure.figsize": (6.2, 3.1),
-        "figure.facecolor": "white",
-        "axes.facecolor": "#e6e6e6",
-        "axes.edgecolor": "black",
-        "axes.linewidth": 0.8,
         "axes.grid": True,
-        "grid.color": "#b8b8b8",
-        "grid.linestyle": "-",
-        "grid.linewidth": 0.5,
-        "grid.alpha": 0.9,
+        "grid.alpha": 0.35,
         "axes.titlesize": 10,
         "axes.labelsize": 8,
         "xtick.labelsize": 7,
         "ytick.labelsize": 7,
         "legend.fontsize": 7,
-        "legend.frameon": True,
-        "legend.facecolor": "white",
-        "legend.edgecolor": "black",
-        "lines.linewidth": 0.9,
         "savefig.dpi": 300,
     })
 
@@ -63,9 +53,6 @@ def _apply_clean_style():
 # ============================================================
 
 def _load_all_basins_raw() -> tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame]]:
-    """
-    Load basin index, attributes, and raw time series for all basins.
-    """
     ds = MiniCamels()
 
     basins_df = ds.basins().copy()
@@ -88,45 +75,32 @@ def plot_streamflow_multiple_basins(
     output_dir: str = "outputs/exploration",
     max_points: int = 1500,
 ) -> str:
-    """
-    Plot streamflow time series for several basins on the same figure.
-    """
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
     available_ids = list(basin_timeseries.keys())
-
     if basin_ids is None:
         basin_ids = available_ids[:4]
 
-    plt.figure(figsize=(6.3, 3.2))
+    plt.figure(figsize=(10, 4.0))
 
-    colors = ["black", "royalblue", "seagreen", "purple"]
-
-    for i, basin_id in enumerate(basin_ids):
+    for basin_id in basin_ids:
         if basin_id not in basin_timeseries:
             continue
 
-        df = basin_timeseries[basin_id].copy()
-        df = df[["time", "qobs"]].dropna()
+        df = basin_timeseries[basin_id][["time", "qobs"]].dropna().copy()
 
         if len(df) > max_points:
             step = max(1, len(df) // max_points)
             df = df.iloc[::step].copy()
 
-        plt.plot(
-            df["time"],
-            df["qobs"],
-            color=colors[i % len(colors)],
-            linewidth=0.8,
-            alpha=0.95,
-            label=f"{basin_id}",
-        )
+        plt.plot(df["time"], df["qobs"], linewidth=1.0, label=f"{basin_id}")
 
     plt.xlabel("Date")
-    plt.ylabel("Q [mm/day]")
+    plt.ylabel("Observed Streamflow")
     plt.title("Observed Streamflow for Multiple Basins")
-    plt.legend(loc="upper right", fontsize=6)
+    plt.legend()
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "explore_streamflow_multiple_basins.png")
@@ -143,65 +117,75 @@ def plot_precip_and_streamflow_one_basin(
     max_points: int = 2200,
 ) -> str:
     """
-    Plot precipitation and streamflow for one basin over the same period.
-    Styled to resemble the example hydrograph figure.
+    Uses the same style logic as the user's reference snippet:
+    - black line for simulated/continuous Q-style curve
+    - red points for observed flow
+    - blue precipitation bars on inverted right axis
     """
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
     if basin_id is None:
         basin_id = list(basin_timeseries.keys())[0]
 
-    df = basin_timeseries[basin_id].copy()
-    df = df[["time", "prcp", "qobs"]].dropna().sort_values("time")
+    df = basin_timeseries[basin_id][["time", "prcp", "qobs"]].dropna().sort_values("time").copy()
 
     if len(df) > max_points:
         df = df.iloc[:max_points].copy()
 
-    fig, ax1 = plt.subplots(figsize=(6.5, 3.0))
-    ax2 = ax1.twinx()
+    x = np.arange(len(df))
+    q_obs = df["qobs"].values
+    p = df["prcp"].values
 
-    q_line, = ax1.plot(
-        df["time"],
-        df["qobs"],
+    fig, axQ = plt.subplots(figsize=(13, 4.5))
+
+    # Streamflow on left axis
+    # We only have observed qobs here, so use line + points in the same spirit
+    q_line, = axQ.plot(
+        x,
+        q_obs,
         color="black",
-        linewidth=0.8,
+        linewidth=1.2,
         label="Q",
         zorder=3,
     )
-
-    p_pts = ax2.scatter(
-        df["time"],
-        df["prcp"],
+    q_pts = axQ.scatter(
+        x,
+        q_obs,
         color="red",
-        s=5,
-        marker="s",
+        s=10,
+        label="Qobs",
+        zorder=4,
+    )
+
+    axQ.set_ylabel(r"$Q\ [mm/day]$")
+    axQ.set_xlabel("Time (Test Period Days)")
+    axQ.grid(True, alpha=0.35)
+
+    # Precipitation on right axis, inverted
+    axP = axQ.twinx()
+    p_bar = axP.bar(
+        x,
+        p,
+        color="blue",
+        width=1.0,
         alpha=0.85,
-        linewidths=0.0,
         label="P",
-        zorder=2,
+        zorder=1,
     )
 
-    ax1.set_xlabel("Time [Test Period Days]")
-    ax1.set_ylabel("Q [mm/day]")
-    ax2.set_ylabel("P [mm/day]")
+    axP.set_ylabel(r"$P\ [mm/day]$")
+    axP.invert_yaxis()
 
-    ax2.invert_yaxis()
+    pmax = np.nanmax(p)
+    axP.set_ylim(pmax * 1.05 if pmax > 0 else 1, 0)
 
-    ax1.xaxis.set_major_locator(mdates.YearLocator(5))
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    # Combined legend, matching your snippet logic
+    hQ, lQ = axQ.get_legend_handles_labels()
+    hP, lP = axP.get_legend_handles_labels()
+    axQ.legend(hP + hQ, lP + lQ, loc="lower left", framealpha=0.95)
 
-    ax1.legend(
-        handles=[q_line, p_pts],
-        labels=["Q", "P"],
-        loc="lower left",
-        fontsize=6,
-        frameon=True,
-        borderpad=0.25,
-        handlelength=1.2,
-    )
-
-    plt.title(f"Basin {basin_id}: Streamflow and Precipitation", pad=4)
+    plt.title(f"Basin {basin_id}: Streamflow and Precipitation")
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, f"explore_precip_streamflow_basin_{basin_id}.png")
@@ -216,15 +200,12 @@ def plot_qobs_histogram(
     output_dir: str = "outputs/exploration",
     sample_size_per_basin: int = 2000,
 ) -> str:
-    """
-    Histogram of qobs values aggregated across basins.
-    """
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
     all_qobs = []
 
-    for basin_id, df in basin_timeseries.items():
+    for _, df in basin_timeseries.items():
         q = df["qobs"].dropna()
         q = q[q >= 0]
 
@@ -235,18 +216,12 @@ def plot_qobs_histogram(
 
     qobs = np.concatenate(all_qobs)
 
-    plt.figure(figsize=(5.1, 3.6))
-    plt.hist(
-        qobs,
-        bins=50,
-        color="#6baed6",
-        edgecolor="black",
-        linewidth=0.4,
-        alpha=0.9,
-    )
+    plt.figure(figsize=(6, 4))
+    plt.hist(qobs, bins=50, color="#6BAED6", edgecolor="black", alpha=0.85)
     plt.xlabel("Observed Streamflow (qobs)")
     plt.ylabel("Frequency")
     plt.title("Histogram of Observed Streamflow")
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "explore_qobs_histogram.png")
@@ -262,28 +237,25 @@ def plot_static_attribute_scatter(
     x_attr: str = "aridity",
     y_attr: str = "runoff_ratio",
 ) -> str:
-    """
-    Scatterplot using static basin attributes.
-    """
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
-    df = attrs_df.copy().reset_index(drop=True)
-    df = df[[x_attr, y_attr]].dropna()
+    df = attrs_df[[x_attr, y_attr]].dropna().copy()
 
-    plt.figure(figsize=(5.0, 3.8))
+    plt.figure(figsize=(6, 5))
     plt.scatter(
         df[x_attr],
         df[y_attr],
-        s=16,
-        color="#6baed6",
-        edgecolor="black",
-        linewidth=0.25,
-        alpha=0.85,
+        alpha=0.6,
+        s=22,
+        color="#6BAED6",
+        edgecolors="black",
+        linewidths=0.3,
     )
     plt.xlabel(x_attr.replace("_", " ").title())
     plt.ylabel(y_attr.replace("_", " ").title())
     plt.title(f"{x_attr.replace('_', ' ').title()} vs {y_attr.replace('_', ' ').title()}")
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, f"explore_static_scatter_{x_attr}_vs_{y_attr}.png")
@@ -298,18 +270,13 @@ def generate_exploratory_plots(
     basin_ids: List[str] = None,
     single_basin_id: str = None,
 ) -> Dict[str, str]:
-    """
-    Generate a set of exploratory plots for Problem 1.
-    """
     ensure_dir(output_dir)
 
     basins_df, attrs_df, basin_timeseries = _load_all_basins_raw()
-
     available_ids = basins_df["basin_id"].astype(str).tolist()
 
     if basin_ids is None:
         basin_ids = available_ids[:4]
-
     if single_basin_id is None:
         single_basin_id = available_ids[0]
 
@@ -372,31 +339,33 @@ def plot_training_history(
     output_dir: str = "outputs/figures",
 ) -> List[str]:
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
     saved_paths = []
     epochs = np.arange(1, len(history["train_loss"]) + 1)
 
-    plt.figure(figsize=(5.3, 3.6))
-    plt.plot(epochs, history["train_loss"], label="Train Loss", color="black", linewidth=0.9)
-    plt.plot(epochs, history["val_loss"], label="Validation Loss", color="royalblue", linewidth=0.9)
+    plt.figure(figsize=(6, 4))
+    plt.plot(epochs, history["train_loss"], label="Train Loss", color="black", linewidth=1.0)
+    plt.plot(epochs, history["val_loss"], label="Validation Loss", color="royalblue", linewidth=1.0)
     plt.xlabel("Epoch")
     plt.ylabel("MSE Loss")
     plt.title("Training and Validation Loss")
-    plt.legend(frameon=True, fontsize=7)
+    plt.legend()
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
     loss_path = os.path.join(output_dir, "training_validation_loss.png")
     plt.savefig(loss_path, bbox_inches="tight")
     plt.close()
     saved_paths.append(loss_path)
 
-    plt.figure(figsize=(5.3, 3.6))
-    plt.plot(epochs, history["train_nse"], label="Train NSE", color="black", linewidth=0.9)
-    plt.plot(epochs, history["val_nse"], label="Validation NSE", color="royalblue", linewidth=0.9)
+    plt.figure(figsize=(6, 4))
+    plt.plot(epochs, history["train_nse"], label="Train NSE", color="black", linewidth=1.0)
+    plt.plot(epochs, history["val_nse"], label="Validation NSE", color="royalblue", linewidth=1.0)
     plt.xlabel("Epoch")
     plt.ylabel("NSE")
     plt.title("Training and Validation NSE")
-    plt.legend(frameon=True, fontsize=7)
+    plt.legend()
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
     nse_path = os.path.join(output_dir, "training_validation_nse.png")
     plt.savefig(nse_path, bbox_inches="tight")
@@ -410,9 +379,6 @@ def collect_test_predictions(
     checkpoint_path: str,
     batch_size: int = 64,
 ) -> Dict:
-    """
-    Load checkpoint, run on test set, and collect predictions.
-    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, checkpoint = load_checkpoint(checkpoint_path, device=device)
 
@@ -467,13 +433,10 @@ def plot_parity(
     max_points: int = 4000,
 ) -> str:
     """
-    Parity plot styled close to the example:
-      - compact portrait figure
-      - pale blue points
-      - red dashed 1:1 line
+    Directly based on the user's reference scatterplot snippet.
     """
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
     if len(obs) > max_points:
         idx = np.random.choice(len(obs), size=max_points, replace=False)
@@ -483,30 +446,21 @@ def plot_parity(
         obs_plot = obs
         pred_plot = pred
 
-    min_val = float(min(obs_plot.min(), pred_plot.min()))
-    max_val = float(max(obs_plot.max(), pred_plot.max()))
+    plt.figure(figsize=(6, 6))
+    plt.scatter(obs_plot, pred_plot, alpha=0.5, s=14, color="#1f77b4")
 
-    plt.figure(figsize=(3.3, 4.0))
-    plt.scatter(
-        obs_plot,
-        pred_plot,
-        s=12,
-        color="#6baed6",
-        edgecolor="none",
-        alpha=0.8,
-    )
     plt.plot(
-        [min_val, max_val],
-        [min_val, max_val],
-        linestyle="--",
-        linewidth=0.9,
-        color="red",
-        label="Prediction",
+        [obs_plot.min(), obs_plot.max()],
+        [obs_plot.min(), obs_plot.max()],
+        "r--",
+        label="Prediction"
     )
+
     plt.xlabel("Observed Streamflow")
     plt.ylabel("Predicted Streamflow")
     plt.title("Observed vs Predicted Streamflow")
-    plt.legend(loc="upper left", fontsize=6)
+    plt.legend()
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "parity_plot.png")
@@ -517,9 +471,6 @@ def plot_parity(
 
 
 def compute_per_basin_metrics(results: Dict) -> pd.DataFrame:
-    """
-    Compute per-basin test metrics.
-    """
     basin_ids = np.unique(results["basin_id"])
     rows = []
 
@@ -540,15 +491,10 @@ def compute_per_basin_metrics(results: Dict) -> pd.DataFrame:
             "kge": float(kge(obs, pred)),
         })
 
-    df = pd.DataFrame(rows).sort_values("nse", ascending=False).reset_index(drop=True)
-    return df
+    return pd.DataFrame(rows).sort_values("nse", ascending=False).reset_index(drop=True)
 
 
 def get_basin_metadata() -> pd.DataFrame:
-    """
-    Load basin coordinates and static attributes from MiniCamels.
-    Returns a dataframe where basin_id is a normal column.
-    """
     ds = MiniCamels()
     basins_df = ds.basins().copy()
     attrs_df = ds.attributes().copy()
@@ -566,11 +512,7 @@ def get_best_and_worst_basin(metrics_df: pd.DataFrame) -> Dict:
     valid_df = metrics_df.dropna(subset=["nse"]).copy()
     best = valid_df.iloc[0].to_dict()
     worst = valid_df.iloc[-1].to_dict()
-
-    return {
-        "best": best,
-        "worst": worst,
-    }
+    return {"best": best, "worst": worst}
 
 
 def plot_test_timeseries(
@@ -582,7 +524,7 @@ def plot_test_timeseries(
     filename_prefix: str = "",
 ) -> str:
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
     mask = results["basin_id"] == basin_id
     obs = results["obs"][mask]
@@ -605,22 +547,16 @@ def plot_test_timeseries(
 
     times = np.array(times, dtype="datetime64[D]").astype("datetime64[ms]").astype(object)
 
-    fig, ax = plt.subplots(figsize=(6.4, 3.1))
-    ax.plot(times, obs, label="Observed", linewidth=0.9, color="black")
-    ax.plot(times, pred, label="Predicted", linewidth=0.9, alpha=0.9, color="royalblue")
-
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Streamflow")
-    ax.set_title(
-        f"{title_prefix} Basin: {basin_id}\n"
-        f"NSE = {basin_nse:.3f}, RMSE = {basin_rmse:.3f}, MAE = {basin_mae:.3f}"
+    plt.figure(figsize=(12, 5))
+    plt.plot(times, obs, label="Observed", linewidth=2, color="#6BAED6")
+    plt.plot(times, pred, label="Predicted", linewidth=2, alpha=0.8, color="#F4A6B5")
+    plt.xlabel("Date")
+    plt.ylabel("Streamflow")
+    plt.title(
+        f"{title_prefix} Basin {basin_id} | NSE={basin_nse:.3f}, RMSE={basin_rmse:.3f}, MAE={basin_mae:.3f}"
     )
-    ax.legend(frameon=True, fontsize=6)
-
-    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-    plt.xticks(rotation=45, ha="right")
-
+    plt.legend()
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, f"{filename_prefix}basin_{basin_id}.png")
@@ -680,34 +616,16 @@ def plot_nse_map(
     output_dir: str = "outputs/figures",
     shapefile_dir: str = "shp",
 ) -> str:
-    """
-    Basin-level NSE map using user-provided shapefiles for continent,
-    drainage network, and lakes.
-    """
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
     import geopandas as gpd
 
     df = metrics_df.merge(meta_df, on="basin_id", how="left").copy()
 
     bins = [-np.inf, 0.0, 0.3, 0.5, 0.65, 0.8, np.inf]
-    labels = [
-        "NSE < 0",
-        "0.00 – 0.30",
-        "0.30 – 0.50",
-        "0.50 – 0.65",
-        "0.65 – 0.80",
-        "NSE > 0.80",
-    ]
-    colors = [
-        "#d73027",
-        "#fc8d59",
-        "#fee08b",
-        "#91cf60",
-        "#1a9850",
-        "#2c7bb6",
-    ]
+    labels = ["NSE < 0", "0.00 – 0.30", "0.30 – 0.50", "0.50 – 0.65", "0.65 – 0.80", "NSE > 0.80"]
+    colors = ["#d73027", "#fc8d59", "#fee08b", "#91cf60", "#1a9850", "#2c7bb6"]
 
     df["nse_class"] = pd.cut(df["nse"], bins=bins, labels=labels, include_lowest=True)
 
@@ -719,7 +637,8 @@ def plot_nse_map(
     df_drainage_network = gpd.read_file(drainage_path)
     df_lakes = gpd.read_file(lakes_path)
 
-    fig, ax = plt.subplots(figsize=(7.2, 3.8))
+    plt.figure(figsize=(10, 5))
+    ax = plt.gca()
 
     df_continent.boundary.plot(color="black", ax=ax, lw=0.6, alpha=0.6)
     df_drainage_network.plot(color="steelblue", ax=ax, lw=0.4, alpha=0.20)
@@ -729,7 +648,6 @@ def plot_nse_map(
         subset = df[df["nse_class"] == cls]
         if len(subset) == 0:
             continue
-
         ax.scatter(
             subset["lon"],
             subset["lat"],
@@ -737,26 +655,19 @@ def plot_nse_map(
             s=20,
             color=color,
             edgecolor="black",
-            linewidth=0.25,
+            linewidth=0.2,
             label=cls,
             zorder=3,
         )
 
-    ax.set_xlabel("Longitude", fontsize=8)
-    ax.set_ylabel("Latitude", fontsize=8)
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
     ax.set_xlim([-125, -66])
     ax.set_ylim([20, 50])
-    ax.set_title("Basin-Level Test NSE Across MiniCAMELS", fontsize=10)
+    ax.set_title("Basin-Level Test NSE Across MiniCAMELS")
+    ax.legend(title="NSE class", loc="lower left", frameon=True, fontsize=6, title_fontsize=7)
 
-    legend = ax.legend(
-        title="NSE class",
-        loc="lower left",
-        frameon=True,
-        fontsize=6,
-        title_fontsize=7,
-    )
-    legend.get_frame().set_alpha(0.95)
-
+    plt.grid(True, alpha=0.25)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "basin_nse_map_classified.png")
@@ -770,20 +681,18 @@ def plot_ranked_nse(
     metrics_df: pd.DataFrame,
     output_dir: str = "outputs/figures",
 ) -> str:
-    """
-    Ranked basin NSE plot.
-    """
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
     df = metrics_df.sort_values("nse", ascending=False).reset_index(drop=True)
 
-    plt.figure(figsize=(6.0, 3.2))
-    plt.plot(np.arange(1, len(df) + 1), df["nse"], marker="o", markersize=2.5, linewidth=0.8, color="black")
+    plt.figure(figsize=(8, 4))
+    plt.plot(np.arange(1, len(df) + 1), df["nse"], marker="o", markersize=3, linewidth=0.8, color="black")
     plt.axhline(0.0, linestyle="--", linewidth=0.8, color="red")
     plt.xlabel("Basin Rank")
     plt.ylabel("Test NSE")
     plt.title("Ranked Basin-Level Test NSE")
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "ranked_basin_nse.png")
@@ -798,26 +707,22 @@ def plot_nse_vs_aridity(
     meta_df: pd.DataFrame,
     output_dir: str = "outputs/figures",
 ) -> str:
-    """
-    Scatter plot of basin NSE versus aridity.
-    """
     ensure_dir(output_dir)
-    _apply_clean_style()
+    _reset_plot_style()
 
     df = metrics_df.merge(meta_df[["basin_id", "aridity"]], on="basin_id", how="left")
     df = df.dropna(subset=["aridity", "nse"]).copy()
 
-    plt.figure(figsize=(5.0, 3.8))
+    plt.figure(figsize=(6, 5))
     plt.scatter(
         df["aridity"],
         df["nse"],
-        s=16,
+        s=18,
         alpha=0.8,
         edgecolor="black",
-        linewidth=0.25,
-        color="#6baed6",
+        linewidth=0.2,
+        color="#6BAED6",
     )
-
     plt.axhline(0.0, linestyle="--", linewidth=0.8, color="red")
 
     best_idx = df["nse"].idxmax()
@@ -830,7 +735,6 @@ def plot_nse_vs_aridity(
         textcoords="offset points",
         fontsize=6,
     )
-
     plt.annotate(
         df.loc[worst_idx, "basin_id"],
         (df.loc[worst_idx, "aridity"], df.loc[worst_idx, "nse"]),
@@ -842,6 +746,7 @@ def plot_nse_vs_aridity(
     plt.xlabel("Aridity")
     plt.ylabel("Test NSE")
     plt.title("Basin-Level Test NSE vs Aridity")
+    plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
     out_path = os.path.join(output_dir, "nse_vs_aridity.png")
@@ -857,9 +762,6 @@ def generate_all_plots(
     output_dir: str = "outputs/figures",
     batch_size: int = 64,
 ) -> Dict:
-    """
-    Generate all main plots, including basin-level variability plots.
-    """
     ensure_dir(output_dir)
     saved = {}
 
@@ -879,7 +781,7 @@ def generate_all_plots(
         results=results,
         metrics_df=metrics_df,
         output_dir=output_dir,
-        max_points=365,
+        max_points=max_points if 'max_points' in locals() else 365,
     )
     saved["best_worst_summary"] = best_worst
 
