@@ -7,9 +7,9 @@ Includes:
 
 import json
 import os
+import random
 from typing import Dict, List
 
-import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -21,7 +21,7 @@ from train import load_checkpoint, inverse_transform_target
 from utils import ensure_dir, nse, rmse, mae, kge
 
 
-# =====================F=======================================
+# ============================================================
 # GENERAL HELPERS
 # ============================================================
 
@@ -69,64 +69,20 @@ def _load_all_basins_raw() -> tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.Dat
     return basins_df, attrs_df, basin_timeseries
 
 
-def plot_streamflow_multiple_basins(
-    basin_timeseries: Dict[str, pd.DataFrame],
-    basin_ids: List[str] = None,
-    output_dir: str = "outputs/exploration",
-    max_points: int = 1500,
-) -> str:
-    ensure_dir(output_dir)
-    _reset_plot_style()
-
-    available_ids = list(basin_timeseries.keys())
-    if basin_ids is None:
-        basin_ids = available_ids[:4]
-
-    plt.figure(figsize=(10, 4.0))
-
-    for basin_id in basin_ids:
-        if basin_id not in basin_timeseries:
-            continue
-
-        df = basin_timeseries[basin_id][["time", "qobs"]].dropna().copy()
-
-        if len(df) > max_points:
-            step = max(1, len(df) // max_points)
-            df = df.iloc[::step].copy()
-
-        plt.plot(df["time"], df["qobs"], linewidth=1.0, label=f"{basin_id}")
-
-    plt.xlabel("Date")
-    plt.ylabel("Observed Streamflow")
-    plt.title("Observed Streamflow for Multiple Basins")
-    plt.legend()
-    plt.grid(True, alpha=0.35)
-    plt.tight_layout()
-
-    out_path = os.path.join(output_dir, "explore_streamflow_multiple_basins.png")
-    plt.savefig(out_path, bbox_inches="tight")
-    plt.close()
-
-    return out_path
-
-
 def plot_precip_and_streamflow_one_basin(
     basin_timeseries: Dict[str, pd.DataFrame],
-    basin_id: str = None,
+    basin_id: str,
     output_dir: str = "outputs/exploration",
     max_points: int = 2200,
 ) -> str:
     """
-    Uses the same style logic as the user's reference snippet:
-    - black line for simulated/continuous Q-style curve
-    - red points for observed flow
-    - blue precipitation bars on inverted right axis
+    One-basin hydrograph styled like the user's reference snippet:
+      - black line for Q
+      - red points for Qobs
+      - blue precipitation bars on inverted right axis
     """
     ensure_dir(output_dir)
     _reset_plot_style()
-
-    if basin_id is None:
-        basin_id = list(basin_timeseries.keys())[0]
 
     df = basin_timeseries[basin_id][["time", "prcp", "qobs"]].dropna().sort_values("time").copy()
 
@@ -139,8 +95,7 @@ def plot_precip_and_streamflow_one_basin(
 
     fig, axQ = plt.subplots(figsize=(13, 4.5))
 
-    # Streamflow on left axis
-    # We only have observed qobs here, so use line + points in the same spirit
+    # ---- Streamflow (left axis)
     q_line, = axQ.plot(
         x,
         q_obs,
@@ -149,20 +104,21 @@ def plot_precip_and_streamflow_one_basin(
         label="Q",
         zorder=3,
     )
-    #q_pts = axQ.scatter(
-    #    x,
-    #    q_obs,
-    #    color="red",
-    #    s=10,
-    #    label="Qobs",
-    #    zorder=4,
-    #)
+
+    q_pts = axQ.scatter(
+        x,
+        q_obs,
+        color="red",
+        s=10,
+        label="Qobs",
+        zorder=4,
+    )
 
     axQ.set_ylabel(r"$Q\ [mm/day]$")
     axQ.set_xlabel("Time (Test Period Days)")
     axQ.grid(True, alpha=0.35)
 
-    # Precipitation on right axis, inverted
+    # ---- Precipitation (right axis, inverted)
     axP = axQ.twinx()
     p_bar = axP.bar(
         x,
@@ -180,7 +136,7 @@ def plot_precip_and_streamflow_one_basin(
     pmax = np.nanmax(p)
     axP.set_ylim(pmax * 1.05 if pmax > 0 else 1, 0)
 
-    # Combined legend, matching your snippet logic
+    # ---- Combined legend
     hQ, lQ = axQ.get_legend_handles_labels()
     hP, lP = axP.get_legend_handles_labels()
     axQ.legend(hP + hQ, lP + lQ, loc="lower left", framealpha=0.95)
@@ -193,6 +149,51 @@ def plot_precip_and_streamflow_one_basin(
     plt.close()
 
     return out_path
+
+
+def plot_streamflow_multiple_basins(
+    basin_timeseries: Dict[str, pd.DataFrame],
+    basin_ids: List[str] = None,
+    n_basins: int = 4,
+    random_seed: int = 42,
+    output_dir: str = "outputs/exploration/random_basin_hydrographs",
+    max_points: int = 2200,
+) -> List[str]:
+    """
+    Instead of plotting many basins in one panel, this function randomly selects
+    N basins and repeats the one-basin hydrograph plot for each of them.
+
+    Returns
+    -------
+    saved_paths : list of str
+        Paths to the generated figures.
+    """
+    ensure_dir(output_dir)
+
+    available_ids = list(basin_timeseries.keys())
+
+    if basin_ids is None:
+        rng = random.Random(random_seed)
+        n_basins = min(n_basins, len(available_ids))
+        basin_ids = rng.sample(available_ids, n_basins)
+    else:
+        basin_ids = [str(b) for b in basin_ids]
+
+    saved_paths = []
+
+    for basin_id in basin_ids:
+        if basin_id not in basin_timeseries:
+            continue
+
+        out_path = plot_precip_and_streamflow_one_basin(
+            basin_timeseries=basin_timeseries,
+            basin_id=basin_id,
+            output_dir=output_dir,
+            max_points=max_points,
+        )
+        saved_paths.append(out_path)
+
+    return saved_paths
 
 
 def plot_qobs_histogram(
@@ -269,36 +270,45 @@ def generate_exploratory_plots(
     output_dir: str = "outputs/exploration",
     basin_ids: List[str] = None,
     single_basin_id: str = None,
-) -> Dict[str, str]:
+    n_random_basins: int = 4,
+    random_seed: int = 42,
+) -> Dict[str, object]:
+    """
+    Generate the full set of exploratory plots for Problem 1.
+    """
     ensure_dir(output_dir)
 
     basins_df, attrs_df, basin_timeseries = _load_all_basins_raw()
     available_ids = basins_df["basin_id"].astype(str).tolist()
 
-    if basin_ids is None:
-        basin_ids = available_ids[:4]
     if single_basin_id is None:
         single_basin_id = available_ids[0]
 
     saved = {}
 
-    saved["streamflow_multiple_basins"] = plot_streamflow_multiple_basins(
-        basin_timeseries=basin_timeseries,
-        basin_ids=basin_ids,
-        output_dir=output_dir,
-    )
-
+    # One detailed hydrograph
     saved["precip_streamflow_one_basin"] = plot_precip_and_streamflow_one_basin(
         basin_timeseries=basin_timeseries,
         basin_id=single_basin_id,
         output_dir=output_dir,
     )
 
+    # Random repeated hydrographs
+    saved["random_basin_hydrographs"] = plot_streamflow_multiple_basins(
+        basin_timeseries=basin_timeseries,
+        basin_ids=basin_ids,
+        n_basins=n_random_basins,
+        random_seed=random_seed,
+        output_dir=os.path.join(output_dir, "random_basin_hydrographs"),
+    )
+
+    # Histogram
     saved["qobs_histogram"] = plot_qobs_histogram(
         basin_timeseries=basin_timeseries,
         output_dir=output_dir,
     )
 
+    # Attribute plots
     saved["scatter_aridity_vs_runoff_ratio"] = plot_static_attribute_scatter(
         attrs_df=attrs_df,
         output_dir=output_dir,
@@ -432,9 +442,6 @@ def plot_parity(
     output_dir: str = "outputs/figures",
     max_points: int = 4000,
 ) -> str:
-    """
-    Directly based on the user's reference scatterplot snippet.
-    """
     ensure_dir(output_dir)
     _reset_plot_style()
 
@@ -781,7 +788,7 @@ def generate_all_plots(
         results=results,
         metrics_df=metrics_df,
         output_dir=output_dir,
-        max_points=max_points if 'max_points' in locals() else 365,
+        max_points=365,
     )
     saved["best_worst_summary"] = best_worst
 
