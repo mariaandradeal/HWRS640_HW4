@@ -3,7 +3,7 @@ import argparse
 from data import summarize_dataset, build_dataloaders
 from model import create_model, count_trainable_parameters
 from train import train_model, evaluate_model
-from visualization import generate_all_plots
+from visualization import generate_all_plots, generate_exploratory_plots
 
 
 def main():
@@ -12,6 +12,10 @@ def main():
 
     # summarize-data
     subparsers.add_parser("summarize-data", help="Print dataset summary")
+
+    # explore-data
+    explore_parser = subparsers.add_parser("explore-data", help="Generate exploratory plots")
+    explore_parser.add_argument("--output-dir", type=str, default="outputs/exploration")
 
     # debug-data
     debug_data_parser = subparsers.add_parser("debug-data", help="Debug dataloaders")
@@ -53,6 +57,13 @@ def main():
 
     if args.command == "summarize-data":
         summarize_dataset()
+
+    elif args.command == "explore-data":
+        saved = generate_exploratory_plots(output_dir=args.output_dir)
+
+        print("\nGenerated exploratory plots:")
+        for key, value in saved.items():
+            print(f"{key}: {value}")
 
     elif args.command == "debug-data":
         train_loader, val_loader, test_loader, meta = build_dataloaders(
