@@ -192,7 +192,7 @@ def plot_precip_and_streamflow_one_basin(
     plt.title(f"Basin {basin_id}: Streamflow and Precipitation")
     plt.tight_layout()
 
-    out_path = os.path.join(output_dir, f"explore_precip_streamflow_basin_{basin_id}.png")
+    out_path = os.path.join(output_dir, f"basin_{basin_id}_hydrograph.png")
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
     return out_path
@@ -232,42 +232,6 @@ def plot_streamflow_multiple_basins(
 
     return saved_paths
 
-
-
-def plot_qobs_histogram(
-    basin_timeseries: Dict[str, pd.DataFrame],
-    output_dir: str = "outputs/exploration",
-    sample_size_per_basin: int = 2000,
-) -> str:
-    """Histogram of observed streamflow across all basins."""
-    ensure_dir(output_dir)
-    reset_plot_style()
-
-    all_qobs = []
-    for _, df in basin_timeseries.items():
-        q = df["qobs"].dropna()
-        q = q[q >= 0]
-        if len(q) > sample_size_per_basin:
-            q = q.sample(sample_size_per_basin, random_state=42)
-        all_qobs.append(q.values)
-
-    qobs = np.concatenate(all_qobs)
-
-    plt.figure(figsize=(6, 4))
-    plt.hist(qobs, bins=50, color=SCATTER_COLOR, edgecolor="black", alpha=0.85)
-    plt.xlabel("Observed Streamflow (qobs)")
-    plt.ylabel("Frequency")
-    plt.title("Histogram of Observed Streamflow")
-    plt.grid(True, alpha=0.35)
-    plt.tight_layout()
-
-    out_path = os.path.join(output_dir, "explore_qobs_histogram.png")
-    plt.savefig(out_path, bbox_inches="tight")
-    plt.close()
-    return out_path
-
-
-
 def plot_attribute_histograms(
     attrs_df: pd.DataFrame,
     output_dir: str = "outputs/exploration",
@@ -299,15 +263,15 @@ def plot_attribute_histograms(
         ax.hist(values, bins=bins, color=color, edgecolor="white", linewidth=0.4)
         ax.set_xlabel(col.replace("_", " ").title())
         ax.set_ylabel("Count")
-        ax.set_title(col.replace("_", " ").title(), fontweight="bold")
+        ax.set_title(col.replace("_", " ").title())
         ax.grid(axis="y", linestyle=":", alpha=0.4)
 
     for ax in axes_flat[n:]:
         ax.set_visible(False)
 
-    fig.suptitle("Static Attribute Distributions", fontsize=12, fontweight="bold")
+    fig.suptitle("Static Attribute Distributions", fontsize=12)
 
-    out_path = os.path.join(output_dir, "explore_attribute_histograms.png")
+    out_path = os.path.join(output_dir, "static_attribute_histograms.png")
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
     return out_path
