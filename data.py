@@ -9,9 +9,16 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
+import os
+import sys
+
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+MINICAMELS_SRC = os.path.join(PROJECT_DIR, "minicamels-main")
+
+if MINICAMELS_SRC not in sys.path:
+    sys.path.insert(0, MINICAMELS_SRC)
 
 from minicamels import MiniCamels
-
 
 DYNAMIC_VARS = ["prcp", "tmax", "tmin", "srad", "vp"]
 TARGET_VAR = "qobs"
