@@ -13,7 +13,7 @@ import os
 import sys
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-MINICAMELS_SRC = os.path.join(PROJECT_DIR, "minicamels-main")
+MINICAMELS_SRC = os.path.join(PROJECT_DIR, "minicamels-main", "src")
 
 if MINICAMELS_SRC not in sys.path:
     sys.path.insert(0, MINICAMELS_SRC)
