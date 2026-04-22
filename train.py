@@ -14,6 +14,30 @@ from model import create_model
 from utils import rmse, mae, nse, kge, ensure_dir, save_json, set_seed
 
 
+class EarlyStopping:
+    """
+    Stop training when validation loss does not improve for a given number of epochs.
+    """
+
+    def __init__(self, patience: int = 10, min_delta: float = 1e-6):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best_loss = float("inf")
+        self.counter = 0
+
+    def step(self, val_loss: float) -> bool:
+        """
+        Returns True if training should stop.
+        """
+        if val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss
+            self.counter = 0
+        else:
+            self.counter += 1
+
+        return self.counter >= self.patience
+
+
 def inverse_transform_target(y: np.ndarray, log_target: bool = True) -> np.ndarray:
     """
     Convert target values back to original streamflow scale.
@@ -146,6 +170,16 @@ def train_model(
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=5,
+        min_lr=1e-6,
+    )
+
+    early_stopping = EarlyStopping(patience=10, min_delta=1e-6)
+
     history = {
         "train_loss": [],
         "val_loss": [],
@@ -157,9 +191,11 @@ def train_model(
         "val_nse": [],
         "train_kge": [],
         "val_kge": [],
+        "learning_rate": [],
     }
 
     best_val_loss = float("inf")
+    best_epoch = 0
     best_checkpoint_path = os.path.join(output_dir, "checkpoints", "best_model.pt")
 
     print(f"Using device: {device}")
@@ -191,6 +227,9 @@ def train_model(
             y_val_true, y_val_pred, log_target=log_target
         )
 
+        scheduler.step(val_loss)
+        current_lr = optimizer.param_groups[0]["lr"]
+
         history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)
         history["train_rmse"].append(train_metrics["rmse"])
@@ -201,9 +240,11 @@ def train_model(
         history["val_nse"].append(val_metrics["nse"])
         history["train_kge"].append(train_metrics["kge"])
         history["val_kge"].append(val_metrics["kge"])
+        history["learning_rate"].append(current_lr)
 
         print(
             f"Epoch {epoch:03d}/{epochs:03d} | "
+            f"LR: {current_lr:.6f} | "
             f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | "
             f"Train NSE: {train_metrics['nse']:.4f} | Val NSE: {val_metrics['nse']:.4f} | "
             f"Train KGE: {train_metrics['kge']:.4f} | Val KGE: {val_metrics['kge']:.4f}"
@@ -211,6 +252,7 @@ def train_model(
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+            best_epoch = epoch
             torch.save(
                 {
                     "model_state_dict": model.state_dict(),
@@ -231,10 +273,15 @@ def train_model(
                         "log_target": log_target,
                     },
                     "best_val_loss": best_val_loss,
+                    "best_epoch": best_epoch,
                     "history": history,
                 },
                 best_checkpoint_path,
             )
+
+        if early_stopping.step(val_loss):
+            print(f"\nEarly stopping triggered at epoch {epoch}.")
+            break
 
     history_path = os.path.join(output_dir, "metrics", "training_history.json")
     save_json(history, history_path)
@@ -244,6 +291,8 @@ def train_model(
         "best_checkpoint_path": best_checkpoint_path,
         "history_path": history_path,
         "output_dir": output_dir,
+        "best_epoch": best_epoch,
+        "best_val_loss": best_val_loss,
     }
 
     return results
