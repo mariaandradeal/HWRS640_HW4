@@ -420,49 +420,44 @@ def plot_data_availability(
 def generate_exploratory_plots(
     output_dir: str = "outputs/exploration",
     basin_ids=None,
-    single_basin_id=None,
-    n_random_basins: int = 4,
+    n_basins: int = 4,
     random_seed: int = 42,
     attribute_vars=None,
 ):
-
     import os
+    import random
 
-    # Create clean folder structure
-    hydro_single_dir = os.path.join(output_dir, "hydrographs", "single_basin")
-    hydro_random_dir = os.path.join(output_dir, "hydrographs", "random_basins")
+    hydro_dir = os.path.join(output_dir, "hydrographs")
     attr_dir = os.path.join(output_dir, "attributes")
 
-    os.makedirs(hydro_single_dir, exist_ok=True)
-    os.makedirs(hydro_random_dir, exist_ok=True)
+    os.makedirs(hydro_dir, exist_ok=True)
     os.makedirs(attr_dir, exist_ok=True)
 
-    # Load data
     basins_df, attrs_df, basin_timeseries = load_all_basins_raw()
     available_ids = basins_df["basin_id"].astype(str).tolist()
 
-    if single_basin_id is None:
-        single_basin_id = available_ids[0]
+    if basin_ids is None:
+        rng = random.Random(random_seed)
+        basin_ids = rng.sample(available_ids, min(n_basins, len(available_ids)))
+    else:
+        basin_ids = [str(b) for b in basin_ids]
 
     saved = {}
 
-    # ✅ Single basin hydrograph
-    saved["single_basin"] = plot_precip_and_streamflow_one_basin(
-        basin_timeseries=basin_timeseries,
-        basin_id=single_basin_id,
-        output_dir=hydro_single_dir,
-    )
+    hydro_paths = []
+    for basin_id in basin_ids:
+        if basin_id not in basin_timeseries:
+            continue
+        hydro_paths.append(
+            plot_precip_and_streamflow_one_basin(
+                basin_timeseries=basin_timeseries,
+                basin_id=basin_id,
+                output_dir=hydro_dir,
+            )
+        )
 
-    # ✅ Random basins hydrographs
-    saved["random_basins"] = plot_streamflow_multiple_basins(
-        basin_timeseries=basin_timeseries,
-        basin_ids=basin_ids,
-        n_basins=n_random_basins,
-        random_seed=random_seed,
-        output_dir=hydro_random_dir,
-    )
+    saved["hydrographs"] = hydro_paths
 
-    # ✅ Attribute histograms
     saved["attributes"] = plot_attribute_histograms(
         attrs_df=attrs_df,
         output_dir=attr_dir,
@@ -470,7 +465,6 @@ def generate_exploratory_plots(
     )
 
     return saved
-
 
 # =====================================================================
 # SECTION 4 — TRAINING HISTORY PLOTS
