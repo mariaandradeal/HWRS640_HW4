@@ -29,6 +29,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to save exploratory figures",
     )
 
+    explore_parser.add_argument(
+        "--n-basins",
+        type=int,
+        default=4,
+        help="Number of basins to plot hydrographs for",
+    )
+
     # train
     train_parser = subparsers.add_parser(
         "train",
@@ -123,12 +130,10 @@ def run_command(args: argparse.Namespace) -> None:
         return
 
     if args.command == "explore-data":
-        saved = generate_exploratory_plots(output_dir=args.output_dir)
-
-        print("\nGenerated exploratory plots:")
-        for key, value in saved.items():
-            print(f"{key}: {value}")
-        return
+        saved = generate_exploratory_plots(
+            output_dir=args.output_dir,
+            n_basins=args.n_basins,
+        )
 
     if args.command == "train":
         results = train_model(
