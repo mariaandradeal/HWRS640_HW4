@@ -455,45 +455,53 @@ def plot_data_availability(
 
 def generate_exploratory_plots(
     output_dir: str = "outputs/exploration",
-    basin_ids: Optional[List[str]] = None,
-    single_basin_id: Optional[str] = None,
+    basin_ids=None,
+    single_basin_id=None,
     n_random_basins: int = 4,
     random_seed: int = 42,
-    attribute_vars: Optional[List[str]] = None,
-) -> Dict[str, object]:
-    """Generate the full set of exploratory figures."""
-    ensure_dir(output_dir)
+    attribute_vars=None,
+):
 
+    import os
+
+    # Create clean folder structure
+    hydro_single_dir = os.path.join(output_dir, "hydrographs", "single_basin")
+    hydro_random_dir = os.path.join(output_dir, "hydrographs", "random_basins")
+    attr_dir = os.path.join(output_dir, "attributes")
+
+    os.makedirs(hydro_single_dir, exist_ok=True)
+    os.makedirs(hydro_random_dir, exist_ok=True)
+    os.makedirs(attr_dir, exist_ok=True)
+
+    # Load data
     basins_df, attrs_df, basin_timeseries = load_all_basins_raw()
     available_ids = basins_df["basin_id"].astype(str).tolist()
 
     if single_basin_id is None:
         single_basin_id = available_ids[0]
 
-    saved: Dict[str, object] = {}
+    saved = {}
 
-    saved["precip_streamflow_one_basin"] = plot_precip_and_streamflow_one_basin(
+    # ✅ Single basin hydrograph
+    saved["single_basin"] = plot_precip_and_streamflow_one_basin(
         basin_timeseries=basin_timeseries,
         basin_id=single_basin_id,
-        output_dir=output_dir,
+        output_dir=hydro_single_dir,
     )
 
-    saved["random_basin_hydrographs"] = plot_streamflow_multiple_basins(
+    # ✅ Random basins hydrographs
+    saved["random_basins"] = plot_streamflow_multiple_basins(
         basin_timeseries=basin_timeseries,
         basin_ids=basin_ids,
         n_basins=n_random_basins,
         random_seed=random_seed,
-        output_dir=os.path.join(output_dir, "random_basin_hydrographs"),
+        output_dir=hydro_random_dir,
     )
 
-    saved["qobs_histogram"] = plot_qobs_histogram(
-        basin_timeseries=basin_timeseries,
-        output_dir=output_dir,
-    )
-
-    saved["attribute_histograms"] = plot_attribute_histograms(
+    # ✅ Attribute histograms
+    saved["attributes"] = plot_attribute_histograms(
         attrs_df=attrs_df,
-        output_dir=output_dir,
+        output_dir=attr_dir,
         attribute_vars=attribute_vars,
     )
 
