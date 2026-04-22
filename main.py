@@ -134,6 +134,12 @@ def run_command(args: argparse.Namespace) -> None:
             output_dir=args.output_dir,
             n_basins=args.n_basins,
         )
+    
+        print("\nGenerated exploratory plots:")
+        for key, value in saved.items():
+            print(f"{key}: {value}")
+    
+        return
 
     if args.command == "train":
         results = train_model(
