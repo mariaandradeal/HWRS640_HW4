@@ -205,7 +205,7 @@ def train_model(
         print(
             f"Epoch {epoch:03d}/{epochs:03d} | "
             f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | "
-            f"Train NSE: {train_metrics['nse']:.4f} | Val NSE: {val_metrics['nse']:.4f}"
+            f"Train NSE: {train_metrics['nse']:.4f} | Val NSE: {val_metrics['nse']:.4f} | "
             f"Train KGE: {train_metrics['kge']:.4f} | Val KGE: {val_metrics['kge']:.4f}"
         )
 
