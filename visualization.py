@@ -704,6 +704,51 @@ def plot_static_hexbin(
     plt.close(fig)
     return out_path
 
+def plot_precip_and_streamflow_one_basin(
+    basin_timeseries: Dict[str, pd.DataFrame],
+    basin_id: str,
+    output_dir: str = "outputs/exploration",
+    max_points: int = 2200,
+) -> str:
+    """Plot streamflow and precipitation for one basin."""
+    ensure_dir(output_dir)
+    reset_plot_style()
+
+    df = basin_timeseries[basin_id][["time", "prcp", "qobs"]].dropna().sort_values("time").copy()
+    if len(df) > max_points:
+        df = df.iloc[:max_points].copy()
+
+    x = np.arange(len(df))
+    q_obs = df["qobs"].values
+    p = df["prcp"].values
+
+    fig, ax_q = plt.subplots(figsize=(13, 4.5))
+
+    ax_q.plot(x, q_obs, color=QOBS_COLOR, linewidth=1.2, label="Qobs", zorder=3)
+    ax_q.set_ylabel(r"$Q\ [mm/day]$")
+    ax_q.set_xlabel("Time (days)")
+    ax_q.grid(True, alpha=0.35)
+
+    ax_p = ax_q.twinx()
+    ax_p.bar(x, p, color=PRECIP_COLOR, width=1.0, alpha=0.9, label="P", zorder=1)
+    ax_p.set_ylabel(r"$P\ [mm/day]$")
+    ax_p.invert_yaxis()
+
+    pmax = np.nanmax(p) if len(p) > 0 else 1.0
+    ax_p.set_ylim(pmax * 1.05 if pmax > 0 else 1, 0)
+
+    h_q, l_q = ax_q.get_legend_handles_labels()
+    h_p, l_p = ax_p.get_legend_handles_labels()
+    ax_q.legend(h_p + h_q, l_p + l_q, loc="lower left", framealpha=0.95)
+
+    plt.title(f"Basin {basin_id}: Streamflow and Precipitation")
+    plt.tight_layout()
+
+    out_path = os.path.join(output_dir, f"basin_{basin_id}_hydrograph.png")
+    plt.savefig(out_path, bbox_inches="tight")
+    plt.close()
+    return out_path
+
 
 def generate_exploratory_plots(
     output_dir: str = "outputs/exploration",
