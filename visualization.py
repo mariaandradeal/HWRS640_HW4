@@ -25,23 +25,22 @@ from utils import ensure_dir, nse, rmse, mae, kge
 # SECTION 1 — GLOBAL STYLE / METADATA (AESTHETIC PALETTE)
 # =====================================================================
 
-# --- Custom aesthetic palette (clean, modern, not the example colors)
-PRIMARY_BLUE   = "#3A86FF"   # vivid blue
-SOFT_CYAN      = "#4CC9F0"   # light cyan
-DEEP_PURPLE    = "#5E548E"   # muted purple
-SOFT_PINK      = "#F28482"   # soft red/pink
-EARTH_GREEN    = "#84A98C"   # desaturated green
-WARM_SAND      = "#E9C46A"   # warm yellow
-DARK_CHARCOAL  = "#2B2D42"   # neutral dark
-LIGHT_GRAY     = "#ADB5BD"   # subtle grid tone
+PRIMARY_BLUE   = "#3A86FF"
+SOFT_CYAN      = "#4CC9F0"
+DEEP_PURPLE    = "#5E548E"
+SOFT_PINK      = "#F28482"
+EARTH_GREEN    = "#84A98C"
+WARM_SAND      = "#E9C46A"
+DARK_CHARCOAL  = "#2B2D42"
+LIGHT_GRAY     = "#ADB5BD"
 
-TRAIN_COLOR = PRIMARY_BLUE
-VAL_COLOR   = SOFT_CYAN
-TEST_COLOR  = DEEP_PURPLE
+TRAIN_COLOR   = PRIMARY_BLUE
+VAL_COLOR     = SOFT_CYAN
+TEST_COLOR    = DEEP_PURPLE
 
-PRECIP_COLOR = SOFT_CYAN
-QOBS_COLOR   = DARK_CHARCOAL
-QPRED_COLOR  = SOFT_PINK
+PRECIP_COLOR  = SOFT_CYAN
+QOBS_COLOR    = DARK_CHARCOAL
+QPRED_COLOR   = SOFT_PINK
 SCATTER_COLOR = PRIMARY_BLUE
 
 FORCING_META: Dict[str, Tuple[str, str]] = {
@@ -81,7 +80,6 @@ DEFAULT_ATTRIBUTE_VARS = [
 # SECTION 2 — GENERAL HELPERS
 # =====================================================================
 
-
 def reset_plot_style() -> None:
     """Apply a clean, publication-style aesthetic."""
     plt.rcdefaults()
@@ -102,16 +100,13 @@ def reset_plot_style() -> None:
     })
 
 
-
 def load_history(history_path: str) -> Dict:
     with open(history_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-
 def get_dataset() -> MiniCamels:
     return MiniCamels()
-
 
 
 def get_basin_metadata() -> pd.DataFrame:
@@ -126,7 +121,6 @@ def get_basin_metadata() -> pd.DataFrame:
         meta_df["basin_name"] = basins_df["basin_name"].values
 
     return meta_df
-
 
 
 def load_all_basins_raw() -> tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame]]:
@@ -147,10 +141,23 @@ def load_all_basins_raw() -> tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.Data
     return basins_df, attrs_df, basin_timeseries
 
 
+def _pretty_label(name: str) -> str:
+    label_map = {
+        "aridity": "Aridity",
+        "runoff_ratio": "Runoff Ratio",
+        "area_km2": "Area (km²)",
+        "q_mean": "Mean Streamflow",
+        "elev_mean": "Mean Elevation (m)",
+        "frac_snow": "Fraction Snow",
+        "baseflow_index": "Baseflow Index",
+        "hfd_mean": "Mean High Flow Duration",
+    }
+    return label_map.get(name, name.replace("_", " ").title())
+
+
 # =====================================================================
 # SECTION 3 — EXPLORATORY PLOTS
 # =====================================================================
-
 
 def plot_precip_and_streamflow_one_basin(
     basin_timeseries: Dict[str, pd.DataFrame],
@@ -198,7 +205,6 @@ def plot_precip_and_streamflow_one_basin(
     return out_path
 
 
-
 def plot_streamflow_multiple_basins(
     basin_timeseries: Dict[str, pd.DataFrame],
     basin_ids: Optional[List[str]] = None,
@@ -232,13 +238,16 @@ def plot_streamflow_multiple_basins(
 
     return saved_paths
 
+
 def plot_attribute_histograms(
     attrs_df: pd.DataFrame,
     output_dir: str = "outputs/exploration",
     attribute_vars: Optional[List[str]] = None,
-    bins: int = 30,
+    bins: int = 22,
 ) -> str:
-    """Single multi-panel figure with histograms for static attributes."""
+    """
+    Multi-panel static attribute distributions with a customized style.
+    """
     ensure_dir(output_dir)
     reset_plot_style()
 
@@ -254,22 +263,69 @@ def plot_attribute_histograms(
     ncols = min(3, n)
     nrows = int(np.ceil(n / ncols))
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 3.5 * nrows), constrained_layout=True)
+    fig, axes = plt.subplots(
+        nrows, ncols,
+        figsize=(5.2 * ncols, 3.8 * nrows),
+        constrained_layout=True
+    )
     axes_flat = np.atleast_1d(axes).ravel()
 
     for i, (ax, col) in enumerate(zip(axes_flat, cols)):
-        values = attrs_df[col].dropna()
+        values = attrs_df[col].dropna().astype(float).values
         color = ATTRIBUTE_HIST_COLORS[i % len(ATTRIBUTE_HIST_COLORS)]
-        ax.hist(values, bins=bins, color=color, edgecolor="white", linewidth=0.4)
-        ax.set_xlabel(col.replace("_", " ").title())
-        ax.set_ylabel("Count")
-        ax.set_title(col.replace("_", " ").title())
-        ax.grid(axis="y", linestyle=":", alpha=0.4)
+
+        ax.hist(
+            values,
+            bins=bins,
+            color=color,
+            alpha=0.70,
+            edgecolor=DARK_CHARCOAL,
+            linewidth=0.7
+        )
+        ax.hist(
+            values,
+            bins=bins,
+            histtype="step",
+            color=DARK_CHARCOAL,
+            linewidth=1.2
+        )
+
+        median_val = np.median(values)
+        ax.axvline(
+            median_val,
+            color=DARK_CHARCOAL,
+            linestyle="--",
+            linewidth=1.2,
+            alpha=0.9
+        )
+
+        ax.set_title(_pretty_label(col), fontsize=11, fontweight="bold")
+        ax.set_xlabel(_pretty_label(col), fontsize=9)
+        ax.set_ylabel("Count", fontsize=9)
+
+        ax.text(
+            0.97, 0.95,
+            f"n = {len(values)}\nmedian = {median_val:.2f}",
+            transform=ax.transAxes,
+            ha="right",
+            va="top",
+            fontsize=8,
+            bbox=dict(
+                boxstyle="round,pad=0.25",
+                facecolor="white",
+                edgecolor=LIGHT_GRAY,
+                alpha=0.9
+            )
+        )
+
+        ax.grid(axis="y", linestyle=":", alpha=0.35)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
     for ax in axes_flat[n:]:
         ax.set_visible(False)
 
-    fig.suptitle("Static Attribute Distributions", fontsize=12)
+    fig.suptitle("Static Catchment Attribute Distributions", fontsize=14, fontweight="bold")
 
     out_path = os.path.join(output_dir, "static_attribute_histograms.png")
     fig.savefig(out_path, bbox_inches="tight")
@@ -277,144 +333,126 @@ def plot_attribute_histograms(
     return out_path
 
 
-
-def plot_forcing_histograms(
-    ds: MiniCamels,
-    basin_ids: List[str],
-    start_date: str,
-    end_date: str,
-    forcing_vars: List[str],
-    output_path: Optional[str] = None,
-) -> Optional[str]:
-    """Histograms of forcing variables across selected basins and time window."""
+def plot_static_scatter(
+    attrs_df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    output_dir: str = "outputs/exploration",
+    filename: Optional[str] = None,
+) -> str:
+    """
+    Scatter plot for two static attributes with regression line and correlation.
+    """
+    ensure_dir(output_dir)
     reset_plot_style()
 
-    start = pd.to_datetime(start_date)
-    end = pd.to_datetime(end_date)
+    if x_col not in attrs_df.columns or y_col not in attrs_df.columns:
+        raise ValueError(f"Columns '{x_col}' and/or '{y_col}' not found in attrs_df.")
 
-    data = {v: [] for v in forcing_vars}
-    for basin_id in basin_ids:
-        forcings = ds.get_forcings(basin_id, start, end).to_array()
-        all_vars = forcings.coords["variable"].values.tolist()
-        for var in forcing_vars:
-            if var in all_vars:
-                data[var].append(forcings.sel(variable=var).values.ravel())
+    df = attrs_df[[x_col, y_col]].dropna().copy()
+    x = df[x_col].astype(float).values
+    y = df[y_col].astype(float).values
 
-    n = len(forcing_vars)
-    ncols = min(3, n)
-    nrows = int(np.ceil(n / ncols))
+    fig, ax = plt.subplots(figsize=(6.5, 5.2))
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 3.5 * nrows), constrained_layout=True)
-    axes_flat = np.atleast_1d(axes).ravel()
-
-    for ax, var in zip(axes_flat, forcing_vars):
-        values = data[var]
-        if not values:
-            ax.set_visible(False)
-            continue
-        combined = pd.concat([pd.Series(v) for v in values], ignore_index=True).dropna()
-        label, color = FORCING_META.get(var, (var, "#7f7f7f"))
-        ax.hist(combined, bins=50, color=color, edgecolor="white", linewidth=0.3)
-        ax.set_xlabel(label)
-        ax.set_ylabel("Count")
-        ax.set_title(var, fontweight="bold")
-        ax.grid(axis="y", linestyle=":", alpha=0.4)
-
-    for ax in axes_flat[n:]:
-        ax.set_visible(False)
-
-    fig.suptitle(f"Forcing Distributions ({start_date} – {end_date})", fontsize=12, fontweight="bold")
-
-    if output_path is not None:
-        fig.savefig(output_path, bbox_inches="tight")
-        plt.close(fig)
-        return output_path
-
-    plt.show()
-    return None
-
-
-
-def plot_data_availability(
-    ds: MiniCamels,
-    periods: Dict[str, Tuple[str, str]],
-    output_path: Optional[str] = None,
-) -> Optional[str]:
-    """Heatmap of valid streamflow fraction by basin and year for train/val/eval splits."""
-    reset_plot_style()
-
-    basin_ids = ds.basins()["basin_id"].tolist()
-    all_starts = [pd.to_datetime(v[0]) for v in periods.values()]
-    all_ends = [pd.to_datetime(v[1]) for v in periods.values()]
-    global_start = min(all_starts)
-    global_end = max(all_ends)
-
-    series = {}
-    for basin_id in basin_ids:
-        q = ds.get_streamflow(basin_id, global_start, global_end)
-        series[basin_id] = pd.Series(q.values, index=pd.to_datetime(q.coords["time"].values))
-
-    n_splits = len(periods)
-    panel_height = max(4, len(basin_ids) * 0.18)
-
-    fig, axes = plt.subplots(
-        1,
-        n_splits,
-        figsize=(sum(max(3, (pd.to_datetime(end).year - pd.to_datetime(start).year + 1) * 0.45)
-                    for _, (start, end) in periods.items()), panel_height),
-        constrained_layout=True,
+    ax.scatter(
+        x, y,
+        s=55,
+        color=PRIMARY_BLUE,
+        alpha=0.78,
+        edgecolor="white",
+        linewidth=0.8
     )
 
-    if n_splits == 1:
-        axes = [axes]
+    if len(x) >= 2:
+        m, b = np.polyfit(x, y, 1)
+        xx = np.linspace(np.min(x), np.max(x), 200)
+        yy = m * xx + b
+        ax.plot(xx, yy, color=SOFT_PINK, linewidth=2.0, linestyle="-")
+        r = np.corrcoef(x, y)[0, 1]
+    else:
+        r = np.nan
 
-    for ax, (split, (start_str, end_str)) in zip(axes, periods.items()):
-        t0 = pd.to_datetime(start_str)
-        t1 = pd.to_datetime(end_str)
-        years = list(range(t0.year, t1.year + 1))
+    ax.set_xlabel(_pretty_label(x_col), fontsize=10)
+    ax.set_ylabel(_pretty_label(y_col), fontsize=10)
+    ax.set_title(f"{_pretty_label(y_col)} vs {_pretty_label(x_col)}", fontsize=12, fontweight="bold")
 
-        matrix = np.full((len(basin_ids), len(years)), np.nan)
-        for i, basin_id in enumerate(basin_ids):
-            ser = series[basin_id]
-            for j, yr in enumerate(years):
-                yr_data = ser[ser.index.year == yr]
-                if len(yr_data) == 0:
-                    continue
-                matrix[i, j] = (~np.isnan(yr_data.values)).mean()
-
-        im = ax.imshow(
-            matrix,
-            aspect="auto",
-            interpolation="nearest",
-            cmap="jet_r",
-            vmin=0.0,
-            vmax=1.0,
-            origin="upper",
+    ax.text(
+        0.03, 0.97,
+        f"n = {len(df)}\nr = {r:.2f}",
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        fontsize=9,
+        bbox=dict(
+            boxstyle="round,pad=0.25",
+            facecolor="white",
+            edgecolor=LIGHT_GRAY,
+            alpha=0.92
         )
+    )
 
-        ax.set_xticks(range(len(years)))
-        ax.set_xticklabels([str(y) if y % 5 == 0 or len(years) <= 10 else "" for y in years],
-                           fontsize=8, rotation=45, ha="right")
-        ax.set_yticks(range(len(basin_ids)))
-        ax.set_yticklabels(basin_ids, fontsize=6)
-        ax.set_xlabel("Year")
-        ax.set_ylabel("Basin ID")
-        ax.set_title(split, fontweight="bold")
+    ax.grid(True, linestyle=":", alpha=0.35)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
-        cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
-        cbar.set_label("Fraction valid", fontsize=8)
-        cbar.ax.tick_params(labelsize=7)
+    if filename is None:
+        filename = f"scatter_{x_col}_vs_{y_col}.png"
 
-    fig.suptitle("Streamflow Data Availability", fontsize=12, fontweight="bold")
+    out_path = os.path.join(output_dir, filename)
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
 
-    if output_path is not None:
-        fig.savefig(output_path, bbox_inches="tight")
-        plt.close(fig)
-        return output_path
 
-    plt.show()
-    return None
+def plot_static_hexbin(
+    attrs_df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    output_dir: str = "outputs/exploration",
+    filename: Optional[str] = None,
+    gridsize: int = 16,
+) -> str:
+    """
+    Alternative density-style plot for overlapping scatter values.
+    """
+    ensure_dir(output_dir)
+    reset_plot_style()
 
+    if x_col not in attrs_df.columns or y_col not in attrs_df.columns:
+        raise ValueError(f"Columns '{x_col}' and/or '{y_col}' not found in attrs_df.")
+
+    df = attrs_df[[x_col, y_col]].dropna().copy()
+    x = df[x_col].astype(float).values
+    y = df[y_col].astype(float).values
+
+    fig, ax = plt.subplots(figsize=(6.5, 5.2))
+
+    hb = ax.hexbin(
+        x, y,
+        gridsize=gridsize,
+        mincnt=1,
+        cmap="magma",
+        linewidths=0.3
+    )
+    cbar = fig.colorbar(hb, ax=ax, pad=0.02)
+    cbar.set_label("Count")
+
+    ax.set_xlabel(_pretty_label(x_col), fontsize=10)
+    ax.set_ylabel(_pretty_label(y_col), fontsize=10)
+    ax.set_title(f"{_pretty_label(y_col)} vs {_pretty_label(x_col)}", fontsize=12, fontweight="bold")
+
+    ax.grid(True, linestyle=":", alpha=0.25)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if filename is None:
+        filename = f"hexbin_{x_col}_vs_{y_col}.png"
+
+    out_path = os.path.join(output_dir, filename)
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
 
 
 def generate_exploratory_plots(
@@ -455,21 +493,45 @@ def generate_exploratory_plots(
                 output_dir=hydro_dir,
             )
         )
-
     saved["hydrographs"] = hydro_paths
 
-    saved["attributes"] = plot_attribute_histograms(
+    saved["attribute_histograms"] = plot_attribute_histograms(
         attrs_df=attrs_df,
         output_dir=attr_dir,
         attribute_vars=attribute_vars,
     )
 
+    saved["scatter_aridity_vs_runoff_ratio"] = plot_static_scatter(
+        attrs_df=attrs_df,
+        x_col="aridity",
+        y_col="runoff_ratio",
+        output_dir=attr_dir,
+        filename="scatter_aridity_vs_runoff_ratio.png",
+    )
+
+    saved["scatter_elev_mean_vs_frac_snow"] = plot_static_scatter(
+        attrs_df=attrs_df,
+        x_col="elev_mean",
+        y_col="frac_snow",
+        output_dir=attr_dir,
+        filename="scatter_elev_mean_vs_frac_snow.png",
+    )
+
+    saved["hexbin_area_vs_q_mean"] = plot_static_hexbin(
+        attrs_df=attrs_df,
+        x_col="area_km2",
+        y_col="q_mean",
+        output_dir=attr_dir,
+        filename="hexbin_area_km2_vs_q_mean.png",
+        gridsize=14,
+    )
+
     return saved
+
 
 # =====================================================================
 # SECTION 4 — TRAINING HISTORY PLOTS
 # =====================================================================
-
 
 def plot_training_history(
     history: Dict,
@@ -517,7 +579,6 @@ def plot_training_history(
 # =====================================================================
 # SECTION 5 — MODEL PREDICTIONS / METRICS
 # =====================================================================
-
 
 def collect_test_predictions(
     checkpoint_path: str,
@@ -571,7 +632,6 @@ def collect_test_predictions(
     }
 
 
-
 def compute_per_basin_metrics(results: Dict) -> pd.DataFrame:
     """Compute evaluation metrics for each basin."""
     basin_ids = np.unique(results["basin_id"])
@@ -597,7 +657,6 @@ def compute_per_basin_metrics(results: Dict) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("nse", ascending=False).reset_index(drop=True)
 
 
-
 def get_best_and_worst_basin(metrics_df: pd.DataFrame) -> Dict:
     """Return the best and worst basins ranked by NSE."""
     valid_df = metrics_df.dropna(subset=["nse"]).copy()
@@ -609,7 +668,6 @@ def get_best_and_worst_basin(metrics_df: pd.DataFrame) -> Dict:
 # =====================================================================
 # SECTION 6 — EVALUATION PLOTS
 # =====================================================================
-
 
 def plot_parity(
     obs: np.ndarray,
@@ -643,7 +701,6 @@ def plot_parity(
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
     return out_path
-
 
 
 def plot_test_timeseries(
@@ -695,7 +752,6 @@ def plot_test_timeseries(
     return out_path
 
 
-
 def plot_best_and_worst_basins(
     results: Dict,
     metrics_df: pd.DataFrame,
@@ -741,31 +797,125 @@ def plot_best_and_worst_basins(
     }
 
 
-
-def plot_ranked_nse(
+def plot_kge_ecdf_and_validation_history(
     metrics_df: pd.DataFrame,
+    history: Dict,
     output_dir: str = "outputs/figures",
+    basin_kge_reference: float = 0.6,
 ) -> str:
-    """Ranked NSE across basins."""
+    """
+    Two-panel KGE summary figure:
+    (a) ECDF of basin-level test KGE across all test basins
+    (b) Validation KGE history across epochs
+    """
     ensure_dir(output_dir)
     reset_plot_style()
 
-    df = metrics_df.sort_values("nse", ascending=False).reset_index(drop=True)
+    # ---------------------------------------------------------
+    # Left panel: basin-level KGE ECDF across all test basins
+    # ---------------------------------------------------------
+    kge_vals = metrics_df["kge"].dropna().astype(float).values
+    if len(kge_vals) == 0:
+        raise ValueError("metrics_df must contain non-empty 'kge' values.")
 
-    plt.figure(figsize=(8, 4))
-    plt.plot(np.arange(1, len(df) + 1), df["nse"], marker="o", markersize=3, linewidth=0.8, color="black")
-    plt.axhline(0.0, linestyle="--", linewidth=0.8, color="red")
-    plt.xlabel("Basin Rank")
-    plt.ylabel("Test NSE")
-    plt.title("Ranked Basin-Level Test NSE")
-    plt.grid(True, alpha=0.35)
-    plt.tight_layout()
+    x_ecdf = np.sort(kge_vals)
+    y_ecdf = np.arange(1, len(x_ecdf) + 1) / len(x_ecdf)
 
-    out_path = os.path.join(output_dir, "ranked_basin_nse.png")
-    plt.savefig(out_path, bbox_inches="tight")
-    plt.close()
+    # ---------------------------------------------------------
+    # Right panel: validation KGE history across epochs
+    # ---------------------------------------------------------
+    if "val_kge" in history:
+        kge_hist = np.asarray(history["val_kge"], dtype=float)
+    elif "kge" in history:
+        kge_hist = np.asarray(history["kge"], dtype=float)
+    else:
+        raise ValueError("history must contain 'val_kge' or 'kge' for validation KGE history.")
+
+    epochs = np.arange(1, len(kge_hist) + 1)
+    kge_benchmark = 1.0 - np.sqrt(2.0)   # mean-flow benchmark ≈ -0.41
+
+    # ---------------------------------------------------------
+    # Figure
+    # ---------------------------------------------------------
+    fig, axes = plt.subplots(
+        1, 2,
+        figsize=(13.5, 4.8),
+        constrained_layout=True
+    )
+
+    # =========================================================
+    # (a) Basin-level KGE ECDF
+    # =========================================================
+    ax = axes[0]
+    ax.step(
+        x_ecdf, y_ecdf,
+        where="post",
+        color=DARK_CHARCOAL,
+        linewidth=2.0
+    )
+
+    ax.axvline(
+        basin_kge_reference,
+        color=LIGHT_GRAY,
+        linestyle=":",
+        linewidth=1.2,
+        label=rf"$KGE = {basin_kge_reference:.1f}$"
+    )
+
+    ax.set_xlabel(r"$KGE$")
+    ax.set_ylabel("ECDF")
+    ax.set_title("Basin-Level Test KGE", fontweight="bold")
+    ax.legend(loc="upper left", frameon=True)
+    ax.grid(True, linestyle=":", alpha=0.35)
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.text(
+        0.02, 0.98, "(a)",
+        transform=ax.transAxes,
+        ha="left", va="top",
+        fontsize=11, fontweight="bold"
+    )
+
+    # =========================================================
+    # (b) Validation KGE history
+    # =========================================================
+    ax = axes[1]
+    ax.plot(
+        epochs, kge_hist,
+        color=DARK_CHARCOAL,
+        linewidth=1.6,
+        label="KGE (val)"
+    )
+    ax.axhline(
+        kge_benchmark,
+        color="gray",
+        linewidth=1.0,
+        linestyle="--",
+        label=f"KGE = {kge_benchmark:.2f} (mean-flow benchmark)"
+    )
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("KGE")
+    ax.set_title("Kling-Gupta Efficiency on validation set", fontweight="bold")
+    ax.legend(loc="center right", frameon=True)
+    ax.grid(True, linestyle=":", alpha=0.35)
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.text(
+        0.02, 0.98, "(b)",
+        transform=ax.transAxes,
+        ha="left", va="top",
+        fontsize=11, fontweight="bold"
+    )
+
+    out_path = os.path.join(output_dir, "kge_ecdf_and_validation_kge.png")
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
     return out_path
-
 
 
 def plot_nse_vs_aridity(
@@ -804,7 +954,6 @@ def plot_nse_vs_aridity(
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
     return out_path
-
 
 
 def plot_nse_map(
@@ -868,7 +1017,6 @@ def plot_nse_map(
 # SECTION 7 — MASTER DRIVER
 # =====================================================================
 
-
 def generate_all_plots(
     checkpoint_path: str,
     history_path: str = "outputs/metrics/training_history.json",
@@ -879,6 +1027,7 @@ def generate_all_plots(
     ensure_dir(output_dir)
     saved: Dict[str, object] = {}
 
+    history = None
     if os.path.exists(history_path):
         history = load_history(history_path)
         saved["history_plots"] = plot_training_history(history, output_dir=output_dir)
@@ -900,8 +1049,15 @@ def generate_all_plots(
     saved["best_worst_summary"] = best_worst
 
     saved["nse_map"] = plot_nse_map(metrics_df, meta_df, output_dir=output_dir)
-    saved["ranked_nse"] = plot_ranked_nse(metrics_df, output_dir=output_dir)
     saved["nse_vs_aridity"] = plot_nse_vs_aridity(metrics_df, meta_df, output_dir=output_dir)
+
+    if history is not None:
+        saved["kge_ecdf_and_validation_kge"] = plot_kge_ecdf_and_validation_history(
+            metrics_df=metrics_df,
+            history=history,
+            output_dir=output_dir,
+            basin_kge_reference=0.6,
+        )
 
     metrics_csv = os.path.join(output_dir, "per_basin_metrics.csv")
     metrics_df.to_csv(metrics_csv, index=False)
