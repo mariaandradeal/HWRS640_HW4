@@ -159,84 +159,334 @@ def _pretty_label(name: str) -> str:
 # SECTION 3 — EXPLORATORY PLOTS
 # =====================================================================
 
-def plot_precip_and_streamflow_one_basin(
-    basin_timeseries: Dict[str, pd.DataFrame],
-    basin_id: str,
+def _pretty_label(name: str) -> str:
+    label_map = {
+        "aridity": "Aridity",
+        "runoff_ratio": "Runoff Ratio",
+        "area_km2": "Area (km²)",
+        "q_mean": "Mean Streamflow",
+        "elev_mean": "Mean Elevation (m)",
+        "frac_snow": "Fraction Snow",
+        "baseflow_index": "Baseflow Index",
+        "hfd_mean": "Mean High Flow Duration",
+    }
+    return label_map.get(name, name.replace("_", " ").title())
+
+
+def plot_attribute_histograms(
+    attrs_df: pd.DataFrame,
     output_dir: str = "outputs/exploration",
-    max_points: int = 2200,
+    attribute_vars: Optional[List[str]] = None,
+    bins: int = 22,
 ) -> str:
-    """Plot streamflow and precipitation for one basin."""
+    """
+    Multi-panel static attribute distributions with a more original style:
+    - soft filled histogram
+    - dark outline
+    - median reference line
+    - compact annotation
+    """
     ensure_dir(output_dir)
     reset_plot_style()
 
-    df = basin_timeseries[basin_id][["time", "prcp", "qobs"]].dropna().sort_values("time").copy()
-    if len(df) > max_points:
-        df = df.iloc[:max_points].copy()
+    if attribute_vars is None:
+        attribute_vars = DEFAULT_ATTRIBUTE_VARS
 
-    x = np.arange(len(df))
-    q_obs = df["qobs"].values
-    p = df["prcp"].values
+    cols = [c for c in attribute_vars if c in attrs_df.columns]
+    n = len(cols)
 
-    fig, ax_q = plt.subplots(figsize=(13, 4.5))
+    if n == 0:
+        raise ValueError("No valid attribute columns were found in attrs_df.")
 
-    ax_q.plot(x, q_obs, color=QOBS_COLOR, linewidth=1.2, label="Qobs", zorder=3)
-    ax_q.set_ylabel(r"$Q\ [mm/day]$")
-    ax_q.set_xlabel("Time (days)")
-    ax_q.grid(True, alpha=0.35)
+    ncols = min(3, n)
+    nrows = int(np.ceil(n / ncols))
 
-    ax_p = ax_q.twinx()
-    ax_p.bar(x, p, color=PRECIP_COLOR, width=1.0, alpha=0.9, label="P", zorder=1)
-    ax_p.set_ylabel(r"$P\ [mm/day]$")
-    ax_p.invert_yaxis()
+    fig, axes = plt.subplots(
+        nrows, ncols,
+        figsize=(5.2 * ncols, 3.8 * nrows),
+        constrained_layout=True
+    )
+    axes_flat = np.atleast_1d(axes).ravel()
 
-    pmax = np.nanmax(p) if len(p) > 0 else 1.0
-    ax_p.set_ylim(pmax * 1.05 if pmax > 0 else 1, 0)
+    for i, (ax, col) in enumerate(zip(axes_flat, cols)):
+        values = attrs_df[col].dropna().astype(float).values
+        color = ATTRIBUTE_HIST_COLORS[i % len(ATTRIBUTE_HIST_COLORS)]
 
-    h_q, l_q = ax_q.get_legend_handles_labels()
-    h_p, l_p = ax_p.get_legend_handles_labels()
-    ax_q.legend(h_p + h_q, l_p + l_q, loc="lower left", framealpha=0.95)
+        # Main histogram
+        ax.hist(
+            values,
+            bins=bins,
+            color=color,
+            alpha=0.70,
+            edgecolor=DARK_CHARCOAL,
+            linewidth=0.7
+        )
 
-    plt.title(f"Basin {basin_id}: Streamflow and Precipitation")
-    plt.tight_layout()
+        # Thin step outline on top for a cleaner look
+        ax.hist(
+            values,
+            bins=bins,
+            histtype="step",
+            color=DARK_CHARCOAL,
+            linewidth=1.2
+        )
 
-    out_path = os.path.join(output_dir, f"basin_{basin_id}_hydrograph.png")
-    plt.savefig(out_path, bbox_inches="tight")
-    plt.close()
+        # Median line
+        median_val = np.median(values)
+        ax.axvline(
+            median_val,
+            color=DARK_CHARCOAL,
+            linestyle="--",
+            linewidth=1.2,
+            alpha=0.9
+        )
+
+        # Title and labels
+        ax.set_title(_pretty_label(col), fontsize=11, fontweight="bold")
+        ax.set_xlabel(_pretty_label(col), fontsize=9)
+        ax.set_ylabel("Count", fontsize=9)
+
+        # Annotation box
+        ax.text(
+            0.97, 0.95,
+            f"n = {len(values)}\nmedian = {median_val:.2f}",
+            transform=ax.transAxes,
+            ha="right",
+            va="top",
+            fontsize=8,
+            bbox=dict(
+                boxstyle="round,pad=0.25",
+                facecolor="white",
+                edgecolor=LIGHT_GRAY,
+                alpha=0.9
+            )
+        )
+
+        # Cleaner axes
+        ax.grid(axis="y", linestyle=":", alpha=0.35)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    for ax in axes_flat[n:]:
+        ax.set_visible(False)
+
+    fig.suptitle("Static Catchment Attribute Distributions", fontsize=14, fontweight="bold")
+
+    out_path = os.path.join(output_dir, "static_attribute_histograms.png")
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
     return out_path
 
 
-def plot_streamflow_multiple_basins(
-    basin_timeseries: Dict[str, pd.DataFrame],
-    basin_ids: Optional[List[str]] = None,
+def plot_static_scatter(
+    attrs_df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    output_dir: str = "outputs/exploration",
+    filename: Optional[str] = None,
+) -> str:
+    """
+    Scatter plot for two static attributes with:
+    - white-edged markers
+    - least-squares trend line
+    - Pearson correlation annotation
+    """
+    ensure_dir(output_dir)
+    reset_plot_style()
+
+    if x_col not in attrs_df.columns or y_col not in attrs_df.columns:
+        raise ValueError(f"Columns '{x_col}' and/or '{y_col}' not found in attrs_df.")
+
+    df = attrs_df[[x_col, y_col]].dropna().copy()
+    x = df[x_col].astype(float).values
+    y = df[y_col].astype(float).values
+
+    fig, ax = plt.subplots(figsize=(6.5, 5.2))
+
+    ax.scatter(
+        x, y,
+        s=55,
+        color=PRIMARY_BLUE,
+        alpha=0.78,
+        edgecolor="white",
+        linewidth=0.8
+    )
+
+    # Regression line
+    if len(x) >= 2:
+        m, b = np.polyfit(x, y, 1)
+        xx = np.linspace(np.min(x), np.max(x), 200)
+        yy = m * xx + b
+        ax.plot(xx, yy, color=SOFT_PINK, linewidth=2.0, linestyle="-")
+
+        r = np.corrcoef(x, y)[0, 1]
+    else:
+        r = np.nan
+
+    ax.set_xlabel(_pretty_label(x_col), fontsize=10)
+    ax.set_ylabel(_pretty_label(y_col), fontsize=10)
+    ax.set_title(f"{_pretty_label(y_col)} vs {_pretty_label(x_col)}", fontsize=12, fontweight="bold")
+
+    ax.text(
+        0.03, 0.97,
+        f"n = {len(df)}\nr = {r:.2f}",
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        fontsize=9,
+        bbox=dict(
+            boxstyle="round,pad=0.25",
+            facecolor="white",
+            edgecolor=LIGHT_GRAY,
+            alpha=0.92
+        )
+    )
+
+    ax.grid(True, linestyle=":", alpha=0.35)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if filename is None:
+        filename = f"scatter_{x_col}_vs_{y_col}.png"
+
+    out_path = os.path.join(output_dir, filename)
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+def plot_static_hexbin(
+    attrs_df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    output_dir: str = "outputs/exploration",
+    filename: Optional[str] = None,
+    gridsize: int = 16,
+) -> str:
+    """
+    Optional alternative to a scatter plot when many points overlap.
+    """
+    ensure_dir(output_dir)
+    reset_plot_style()
+
+    if x_col not in attrs_df.columns or y_col not in attrs_df.columns:
+        raise ValueError(f"Columns '{x_col}' and/or '{y_col}' not found in attrs_df.")
+
+    df = attrs_df[[x_col, y_col]].dropna().copy()
+    x = df[x_col].astype(float).values
+    y = df[y_col].astype(float).values
+
+    fig, ax = plt.subplots(figsize=(6.5, 5.2))
+
+    hb = ax.hexbin(
+        x, y,
+        gridsize=gridsize,
+        mincnt=1,
+        cmap="magma",
+        linewidths=0.3
+    )
+    cbar = fig.colorbar(hb, ax=ax, pad=0.02)
+    cbar.set_label("Count")
+
+    ax.set_xlabel(_pretty_label(x_col), fontsize=10)
+    ax.set_ylabel(_pretty_label(y_col), fontsize=10)
+    ax.set_title(f"{_pretty_label(y_col)} vs {_pretty_label(x_col)}", fontsize=12, fontweight="bold")
+
+    ax.grid(True, linestyle=":", alpha=0.25)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if filename is None:
+        filename = f"hexbin_{x_col}_vs_{y_col}.png"
+
+    out_path = os.path.join(output_dir, filename)
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+def generate_exploratory_plots(
+    output_dir: str = "outputs/exploration",
+    basin_ids=None,
     n_basins: int = 4,
     random_seed: int = 42,
-    output_dir: str = "outputs/exploration/random_basin_hydrographs",
-    max_points: int = 2200,
-) -> List[str]:
-    """Generate repeated hydrograph plots for several basins."""
-    ensure_dir(output_dir)
+    attribute_vars=None,
+):
+    import os
+    import random
 
-    available_ids = list(basin_timeseries.keys())
+    hydro_dir = os.path.join(output_dir, "hydrographs")
+    attr_dir = os.path.join(output_dir, "attributes")
+
+    os.makedirs(hydro_dir, exist_ok=True)
+    os.makedirs(attr_dir, exist_ok=True)
+
+    basins_df, attrs_df, basin_timeseries = load_all_basins_raw()
+    available_ids = basins_df["basin_id"].astype(str).tolist()
+
     if basin_ids is None:
         rng = random.Random(random_seed)
         basin_ids = rng.sample(available_ids, min(n_basins, len(available_ids)))
     else:
         basin_ids = [str(b) for b in basin_ids]
 
-    saved_paths = []
+    saved = {}
+
+    # -------------------------------------------------------------
+    # Hydrographs
+    # -------------------------------------------------------------
+    hydro_paths = []
     for basin_id in basin_ids:
         if basin_id not in basin_timeseries:
             continue
-        saved_paths.append(
+        hydro_paths.append(
             plot_precip_and_streamflow_one_basin(
                 basin_timeseries=basin_timeseries,
                 basin_id=basin_id,
-                output_dir=output_dir,
-                max_points=max_points,
+                output_dir=hydro_dir,
             )
         )
+    saved["hydrographs"] = hydro_paths
 
-    return saved_paths
+    # -------------------------------------------------------------
+    # Attribute histograms
+    # -------------------------------------------------------------
+    saved["attribute_histograms"] = plot_attribute_histograms(
+        attrs_df=attrs_df,
+        output_dir=attr_dir,
+        attribute_vars=attribute_vars,
+    )
+
+    # -------------------------------------------------------------
+    # Static scatter plots
+    # -------------------------------------------------------------
+    saved["scatter_aridity_vs_runoff_ratio"] = plot_static_scatter(
+        attrs_df=attrs_df,
+        x_col="aridity",
+        y_col="runoff_ratio",
+        output_dir=attr_dir,
+        filename="scatter_aridity_vs_runoff_ratio.png",
+    )
+
+    saved["scatter_elev_mean_vs_frac_snow"] = plot_static_scatter(
+        attrs_df=attrs_df,
+        x_col="elev_mean",
+        y_col="frac_snow",
+        output_dir=attr_dir,
+        filename="scatter_elev_mean_vs_frac_snow.png",
+    )
+
+    # Optional extra: useful when overlap is high
+    saved["hexbin_area_vs_q_mean"] = plot_static_hexbin(
+        attrs_df=attrs_df,
+        x_col="area_km2",
+        y_col="q_mean",
+        output_dir=attr_dir,
+        filename="hexbin_area_km2_vs_q_mean.png",
+        gridsize=14,
+    )
+
+    return saved
 
 
 def plot_attribute_histograms(
