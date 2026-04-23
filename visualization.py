@@ -1127,7 +1127,7 @@ def plot_kge_ecdf_and_validation_history(
         raise ValueError("history must contain 'val_kge' or 'kge' for validation KGE history.")
 
     epochs = np.arange(1, len(kge_hist) + 1)
-    kge_benchmark = 1.0 - np.sqrt(2.0)   # mean-flow benchmark ≈ -0.41
+    #kge_benchmark = 1.0 - np.sqrt(2.0)   # mean-flow benchmark ≈ -0.41
 
     # ---------------------------------------------------------
     # Figure
@@ -1183,13 +1183,13 @@ def plot_kge_ecdf_and_validation_history(
         linewidth=1.6,
         label="KGE (val)"
     )
-    ax.axhline(
-        kge_benchmark,
-        color="gray",
-        linewidth=1.0,
-        linestyle="--",
-        label=f"KGE = {kge_benchmark:.2f} (mean-flow benchmark)"
-    )
+    #ax.axhline(
+    #    kge_benchmark,
+    #    color="gray",
+    #    linewidth=1.0,
+    #    linestyle="--",
+    #    label=f"KGE = {kge_benchmark:.2f} (mean-flow benchmark)"
+    #)
 
     ax.set_xlabel("Epoch")
     ax.set_ylabel("KGE")
