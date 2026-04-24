@@ -1149,13 +1149,13 @@ def plot_kge_ecdf_and_validation_history(
         linewidth=2.0
     )
 
-    ax.axvline(
-        basin_kge_reference,
-        color=LIGHT_GRAY,
-        linestyle=":",
-        linewidth=1.2,
-        label=rf"$KGE = {basin_kge_reference:.1f}$"
-    )
+    #ax.axvline(
+    #    basin_kge_reference,
+    #    color=LIGHT_GRAY,
+    #    linestyle=":",
+    #    linewidth=1.2,
+    #    label=rf"$KGE = {basin_kge_reference:.1f}$"
+    #)
 
     ax.set_xlabel(r"$KGE$")
     ax.set_ylabel("ECDF")
@@ -1307,6 +1307,136 @@ def plot_nse_map(
     plt.close()
     return out_path
 
+def plot_metrics_boxplot(
+    metrics_df: pd.DataFrame,
+    output_dir: str = "outputs/figures",
+) -> str:
+    """
+    Aesthetic single-panel boxplot of NSE, RMSE, MAE, and KGE
+    across all basins.
+    """
+    ensure_dir(output_dir)
+    reset_plot_style()
+
+    metric_cols = ["nse", "rmse", "mae", "kge"]
+    metric_labels = ["NSE", "RMSE", "MAE", "KGE"]
+
+    data = metrics_df[metric_cols].dropna()
+
+    colors = [
+        "#2563EB",  # NSE blue
+        "#0F9F8E",  # RMSE teal
+        "#FF6B57",  # MAE coral
+        "#7A3FC8",  # KGE purple
+    ]
+
+    fig, ax = plt.subplots(figsize=(11, 6.5))
+
+    box = ax.boxplot(
+        [data[col].values for col in metric_cols],
+        labels=metric_labels,
+        patch_artist=True,
+        widths=0.50,
+        showmeans=True,
+        showfliers=True,
+        meanprops=dict(
+            marker="D",
+            markerfacecolor="black",
+            markeredgecolor="white",
+            markersize=6,
+        ),
+        medianprops=dict(
+            color="black",
+            linewidth=2.0,
+        ),
+        whiskerprops=dict(
+            color="#333333",
+            linewidth=1.2,
+        ),
+        capprops=dict(
+            color="#333333",
+            linewidth=1.2,
+        ),
+        flierprops=dict(
+            marker="o",
+            markerfacecolor="white",
+            markeredgecolor="black",
+            markersize=5,
+            alpha=0.9,
+        ),
+    )
+
+    for patch, color in zip(box["boxes"], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.28)
+        patch.set_edgecolor(color)
+        patch.set_linewidth(1.8)
+
+    for whisker, color in zip(box["whiskers"], np.repeat(colors, 2)):
+        whisker.set_color(color)
+
+    for cap, color in zip(box["caps"], np.repeat(colors, 2)):
+        cap.set_color(color)
+
+    # Titles and labels
+    ax.set_title(
+        "Model Performance Across Basins",
+        fontsize=20,
+        fontweight="bold",
+        pad=18,
+    )
+    ax.set_ylabel("Metric Value", fontsize=13)
+    ax.set_xlabel("")
+
+    # Grid and limits
+    ax.grid(axis="y", linestyle="--", alpha=0.30)
+    ax.grid(axis="x", visible=False)
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    # Optional reference line for efficiency metrics
+    ax.axhline(
+        0.0,
+        color="#999999",
+        linestyle=":",
+        linewidth=1.0,
+        alpha=0.7,
+    )
+
+    # Add mean labels above each box
+    means = data[metric_cols].mean()
+    for i, col in enumerate(metric_cols, start=1):
+        ax.text(
+            i,
+            means[col],
+            f"{means[col]:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+            color="#222222",
+        )
+
+    # Explanatory note
+    fig.text(
+        0.5,
+        0.02,
+        "Higher is better for NSE and KGE; lower is better for RMSE and MAE.",
+        ha="center",
+        fontsize=10,
+        style="italic",
+        color="#333333",
+    )
+
+    plt.tight_layout(rect=[0, 0.05, 1, 1])
+
+    out_path = os.path.join(output_dir, "metrics_boxplot.png")
+    fig.savefig(out_path, bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+    return out_path
+
 
 # =====================================================================
 # SECTION 7 — MASTER DRIVER
@@ -1331,6 +1461,12 @@ def generate_all_plots(
 
     results = collect_test_predictions(checkpoint_path, batch_size=batch_size)
     metrics_df = compute_per_basin_metrics(results)
+    
+    saved["metrics_boxplot"] = plot_metrics_boxplot(
+    metrics_df=metrics_df,
+    output_dir=output_dir
+    )
+    
     meta_df = get_basin_metadata()
 
     saved["parity_plot"] = plot_parity(results["obs"], results["pred"], output_dir=output_dir)
