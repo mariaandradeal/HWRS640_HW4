@@ -1419,15 +1419,15 @@ def plot_metrics_boxplot(
         )
 
     # Explanatory note
-    fig.text(
-        0.5,
-        0.02,
-        "Higher is better for NSE and KGE; lower is better for RMSE and MAE.",
-        ha="center",
-        fontsize=10,
-        style="italic",
-        color="#333333",
-    )
+    #fig.text(
+    #    0.5,
+    #    0.02,
+    #    "Higher is better for NSE and KGE; lower is better for RMSE and MAE.",
+    #    ha="center",
+    #    fontsize=10,
+     #   style="italic",
+    #    color="#333333",
+    #)
 
     plt.tight_layout(rect=[0, 0.05, 1, 1])
 
