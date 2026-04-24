@@ -272,7 +272,7 @@ def plot_attribute_histograms(
 
     fig.suptitle("Static Catchment Attribute Distributions", fontsize=14, fontweight="bold")
 
-    out_path = os.path.join(output_dir, "static_attribute_histograms.png")
+    out_path = os.path.join(output_dir, "static_attribute_histograms.svg")
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
     return out_path
@@ -347,7 +347,7 @@ def plot_static_scatter(
     ax.spines["right"].set_visible(False)
 
     if filename is None:
-        filename = f"scatter_{x_col}_vs_{y_col}.png"
+        filename = f"scatter_{x_col}_vs_{y_col}.svg"
 
     out_path = os.path.join(output_dir, filename)
     fig.savefig(out_path, bbox_inches="tight")
@@ -397,7 +397,7 @@ def plot_static_hexbin(
     ax.spines["right"].set_visible(False)
 
     if filename is None:
-        filename = f"hexbin_{x_col}_vs_{y_col}.png"
+        filename = f"hexbin_{x_col}_vs_{y_col}.svg"
 
     out_path = os.path.join(output_dir, filename)
     fig.savefig(out_path, bbox_inches="tight")
@@ -465,7 +465,7 @@ def generate_exploratory_plots(
         x_col="aridity",
         y_col="runoff_ratio",
         output_dir=attr_dir,
-        filename="scatter_aridity_vs_runoff_ratio.png",
+        filename="scatter_aridity_vs_runoff_ratio.svg",
     )
 
     saved["scatter_elev_mean_vs_frac_snow"] = plot_static_scatter(
@@ -473,7 +473,7 @@ def generate_exploratory_plots(
         x_col="elev_mean",
         y_col="frac_snow",
         output_dir=attr_dir,
-        filename="scatter_elev_mean_vs_frac_snow.png",
+        filename="scatter_elev_mean_vs_frac_snow.svg",
     )
 
     # Optional extra: useful when overlap is high
@@ -482,7 +482,7 @@ def generate_exploratory_plots(
         x_col="area_km2",
         y_col="q_mean",
         output_dir=attr_dir,
-        filename="hexbin_area_km2_vs_q_mean.png",
+        filename="hexbin_area_km2_vs_q_mean.svg",
         gridsize=14,
     )
 
@@ -577,7 +577,7 @@ def plot_attribute_histograms(
 
     fig.suptitle("Static Catchment Attribute Distributions", fontsize=14, fontweight="bold")
 
-    out_path = os.path.join(output_dir, "static_attribute_histograms.png")
+    out_path = os.path.join(output_dir, "static_attribute_histograms.svg")
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
     return out_path
@@ -647,7 +647,7 @@ def plot_static_scatter(
     ax.spines["right"].set_visible(False)
 
     if filename is None:
-        filename = f"scatter_{x_col}_vs_{y_col}.png"
+        filename = f"scatter_{x_col}_vs_{y_col}.svg"
 
     out_path = os.path.join(output_dir, filename)
     fig.savefig(out_path, bbox_inches="tight")
@@ -697,7 +697,7 @@ def plot_static_hexbin(
     ax.spines["right"].set_visible(False)
 
     if filename is None:
-        filename = f"hexbin_{x_col}_vs_{y_col}.png"
+        filename = f"hexbin_{x_col}_vs_{y_col}.svg"
 
     out_path = os.path.join(output_dir, filename)
     fig.savefig(out_path, bbox_inches="tight")
@@ -744,7 +744,7 @@ def plot_precip_and_streamflow_one_basin(
     plt.title(f"Basin {basin_id}: Streamflow and Precipitation")
     plt.tight_layout()
 
-    out_path = os.path.join(output_dir, f"basin_{basin_id}_hydrograph.png")
+    out_path = os.path.join(output_dir, f"basin_{basin_id}_hydrograph.svg")
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
     return out_path
@@ -801,7 +801,7 @@ def generate_exploratory_plots(
         x_col="aridity",
         y_col="runoff_ratio",
         output_dir=attr_dir,
-        filename="scatter_aridity_vs_runoff_ratio.png",
+        filename="scatter_aridity_vs_runoff_ratio.svg",
     )
 
     saved["scatter_elev_mean_vs_frac_snow"] = plot_static_scatter(
@@ -809,7 +809,7 @@ def generate_exploratory_plots(
         x_col="elev_mean",
         y_col="frac_snow",
         output_dir=attr_dir,
-        filename="scatter_elev_mean_vs_frac_snow.png",
+        filename="scatter_elev_mean_vs_frac_snow.svg",
     )
 
     saved["hexbin_area_vs_q_mean"] = plot_static_hexbin(
@@ -817,7 +817,7 @@ def generate_exploratory_plots(
         x_col="area_km2",
         y_col="q_mean",
         output_dir=attr_dir,
-        filename="hexbin_area_km2_vs_q_mean.png",
+        filename="hexbin_area_km2_vs_q_mean.svg",
         gridsize=14,
     )
 
@@ -848,7 +848,7 @@ def plot_training_history(
     plt.legend()
     plt.grid(True, alpha=0.35)
     plt.tight_layout()
-    loss_path = os.path.join(output_dir, "training_validation_loss.png")
+    loss_path = os.path.join(output_dir, "training_validation_loss.svg")
     plt.savefig(loss_path, bbox_inches="tight")
     plt.close()
     saved_paths.append(loss_path)
@@ -863,7 +863,7 @@ def plot_training_history(
         plt.legend()
         plt.grid(True, alpha=0.35)
         plt.tight_layout()
-        nse_path = os.path.join(output_dir, "training_validation_nse.png")
+        nse_path = os.path.join(output_dir, "training_validation_nse.svg")
         plt.savefig(nse_path, bbox_inches="tight")
         plt.close()
         saved_paths.append(nse_path)
@@ -992,7 +992,7 @@ def plot_parity(
     plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
-    out_path = os.path.join(output_dir, "parity_plot.png")
+    out_path = os.path.join(output_dir, "parity_plot.svg")
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
     return out_path
@@ -1041,7 +1041,7 @@ def plot_test_timeseries(
     plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
-    out_path = os.path.join(output_dir, f"{filename_prefix}basin_{basin_id}.png")
+    out_path = os.path.join(output_dir, f"{filename_prefix}basin_{basin_id}.svg")
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
     return out_path
@@ -1207,7 +1207,7 @@ def plot_kge_ecdf_and_validation_history(
         fontsize=11, fontweight="bold"
     )
 
-    out_path = os.path.join(output_dir, "kge_ecdf_and_validation_kge.png")
+    out_path = os.path.join(output_dir, "kge_ecdf_and_validation_kge.svg")
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
     return out_path
@@ -1245,7 +1245,7 @@ def plot_nse_vs_aridity(
     plt.grid(True, alpha=0.35)
     plt.tight_layout()
 
-    out_path = os.path.join(output_dir, "nse_vs_aridity.png")
+    out_path = os.path.join(output_dir, "nse_vs_aridity.svg")
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
     return out_path
@@ -1302,7 +1302,7 @@ def plot_nse_map(
     plt.grid(True, alpha=0.25)
     plt.tight_layout()
 
-    out_path = os.path.join(output_dir, "basin_nse_map_classified.png")
+    out_path = os.path.join(output_dir, "basin_nse_map_classified.svg")
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
     return out_path
@@ -1431,7 +1431,7 @@ def plot_metrics_boxplot(
 
     plt.tight_layout(rect=[0, 0.05, 1, 1])
 
-    out_path = os.path.join(output_dir, "metrics_boxplot.png")
+    out_path = os.path.join(output_dir, "metrics_boxplot.svg")
     fig.savefig(out_path, bbox_inches="tight", dpi=300)
     plt.close(fig)
 
