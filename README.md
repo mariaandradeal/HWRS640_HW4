@@ -1,12 +1,16 @@
 # HWRS640 Assignment 4: Streamflow Prediction
 
-This project implements a sequence model (LSTM) to predict daily streamflow using the MiniCAMELS dataset.
+This project implements an LSTM-based sequence model to predict daily streamflow using the MiniCAMELS dataset.
 
-## Structure
+---
+
+## Project Structure
+
+
 HWRS640_HW4/
 │
 ├── main.py # Command-line interface (CLI)
-├── data.py # Dataset loading and dataloaders
+├── data.py # Dataset loading and preprocessing
 ├── model.py # LSTM model with static feature fusion
 ├── train.py # Training and evaluation pipeline
 ├── utils.py # Metrics (RMSE, MAE, NSE, KGE)
@@ -20,19 +24,21 @@ HWRS640_HW4/
 │
 └── README.md
 
+
 ---
 
-## Setup Instructions
+##  Setup Instructions
 
-1. Activate environment
+### 1. Activate environment
 ```bash
 conda activate spyder-env
 
 2. Install dependencies
 pip install -r requirements.txt
+🚀 Command Line Interface (CLI)
 
-Command Line Interface (CLI)
-All functionality is accessed through main.py.
+All functionality is accessed through:
+python main.py <command>
 
 1. Summarize dataset
 python main.py summarize-data
@@ -44,69 +50,65 @@ dynamic variables
 static attributes
 
 2. Generate exploratory plots
-python main.py explore-data
+python main.py explore-data --n-basins 4
 
-Outputs (in outputs/exploration/):
-streamflow time series
-precipitation vs streamflow
-histogram of streamflow
-attribute scatter plots
+Description
+Randomly selects N basins
+Generates hydrographs (precipitation + streamflow)
+Plots distributions of static basin attributes
+Outputs (in outputs/exploration/)
+outputs/exploration/
+├── hydrographs/
+│   ├── basin_XXXXX_hydrograph.png
+│   ├── basin_XXXXX_hydrograph.png
+│   └── ...
+└── attributes/
+    └── static_attribute_histograms.png
 
-3. Debug dataloaders
-python main.py debug-data --seq-len 60 --batch-size 32
-
-Shows:
-tensor shapes
-sample structure
-
-4. Debug model
-python main.py debug-model --seq-len 60 --batch-size 32
-
-Verifies:
-
-input/output shapes
-number of trainable parameters
-
-5. Train model
-python main.py train \
-    --seq-len 60 \
-    --batch-size 64 \
-    --hidden-size 64 \
-    --num-layers 1 \
-    --dropout 0.1 \
-    --learning-rate 0.001 \
-    --epochs 20 \
+3. Train model
+python main.py train 
+    --seq-len 120 ^
+    --batch-size 128 ^
+    --hidden-size 128 ^
+    --num-layers 1 ^
+    --dropout 0.1 ^
+    --learning-rate 0.0005 ^
+    --epochs 20 ^
     --output-dir outputs
 
 This will:
-
-train the model
+train the LSTM model
 save the best checkpoint
 store training history
-
 Outputs:
-
 outputs/checkpoints/best_model.pt
 outputs/metrics/training_history.json
 
-6. Evaluate model
-python main.py evaluate \
-    --checkpoint outputs/checkpoints/best_model.pt
+4. Evaluate model
+python main.py evaluate ^
+--checkpoint outputs\checkpoints\best_model.pt
 
 Reports:
-
 RMSE
 MAE
 NSE
 KGE
 
-7. Generate plots
+5. Generate evaluation plots
 python main.py plot \
     --checkpoint outputs/checkpoints/best_model.pt
 
-Outputs (in outputs/figures/):
 
+
+Outputs (in outputs/figures/)
 training loss curve
-NSE/KGE evolution
+NSE evolution
 observed vs predicted scatter
-best/worst basin plots
+best and worst basin hydrographs
+NSE ranking and spatial analysis
+
+Notes
+The model uses both dynamic meteorological inputs and static basin attributes
+Target variable is daily streamflow (qobs)
+Data is normalized using training statistics
+Log-transform is applied to streamflow during training
